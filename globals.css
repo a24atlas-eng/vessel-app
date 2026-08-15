@@ -1,0 +1,9 @@
+@media (min-width: 900px) {
+  main[data-vessel-grid] {
+    grid-template-columns: 300px 1fr 300px !important;
+    align-items: start !important;
+  }
+  section[data-vessel-bottom] {
+    grid-template-columns: 1fr 380px !important;
+  }
+}
