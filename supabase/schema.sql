@@ -2,7 +2,7 @@
 
 create table if not exists profiles (
   id uuid primary key references auth.users(id) on delete cascade,
-  display_name text default 'Игрок',
+  display_name text,
   gender text default 'vessel_a',
   avatar_url text,
   photo_saved_at timestamptz,
@@ -78,4 +78,3 @@ create policy "avatar delete own folder"
 create policy "avatar public read"
   on storage.objects for select to public
   using (bucket_id = 'avatars');
-
