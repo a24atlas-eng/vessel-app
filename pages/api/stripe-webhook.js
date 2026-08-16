@@ -1,15 +1,25 @@
 import Stripe from "stripe";
-import { buffer } from "micro";
 import { supabaseAdmin } from "../../lib/supabaseAdmin";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 export const config = { api: { bodyParser: false } };
 
+// Reads the raw request body ourselves (needed to verify the Stripe signature)
+// without relying on an external package.
+function readRawBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    req.on("data", (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
+    req.on("end", () => resolve(Buffer.concat(chunks)));
+    req.on("error", reject);
+  });
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).end();
 
-  const buf = await buffer(req);
+  const buf = await readRawBody(req);
   const sig = req.headers["stripe-signature"];
 
   let event;
@@ -43,8 +53,6 @@ export default async function handler(req, res) {
       break;
     }
 
-    // Fires when the customer cancels their own monthly subscription
-    // (including via the self-service Billing Portal).
     case "customer.subscription.deleted": {
       const sub = event.data.object;
       const customer = await stripe.customers.retrieve(sub.customer);
