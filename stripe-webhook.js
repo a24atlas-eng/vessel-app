@@ -19,24 +19,42 @@ export default async function handler(req, res) {
     return res.status(400).send(`Webhook signature error: ${err.message}`);
   }
 
-  const setStatus = async (userId, status) => {
-    if (!userId) return;
-    await supabaseAdmin.from("profiles").update({ subscription_status: status }).eq("id", userId);
-  };
-
   switch (event.type) {
     case "checkout.session.completed": {
       const session = event.data.object;
-      await setStatus(session.metadata?.userId, "active");
+      const userId = session.metadata?.userId;
+      const plan = session.metadata?.plan; // 'monthly' | 'yearly'
+      if (!userId) break;
+
+      if (plan === "yearly") {
+        const paidUntil = new Date();
+        paidUntil.setFullYear(paidUntil.getFullYear() + 1);
+        await supabaseAdmin.from("profiles").update({
+          subscription_status: "active",
+          plan: "yearly",
+          paid_until: paidUntil.toISOString(),
+        }).eq("id", userId);
+      } else {
+        await supabaseAdmin.from("profiles").update({
+          subscription_status: "active",
+          plan: "monthly",
+        }).eq("id", userId);
+      }
       break;
     }
-    case "customer.subscription.deleted":
-    case "customer.subscription.paused": {
+
+    // Fires when the customer cancels their own monthly subscription
+    // (including via the self-service Billing Portal).
+    case "customer.subscription.deleted": {
       const sub = event.data.object;
       const customer = await stripe.customers.retrieve(sub.customer);
-      await setStatus(customer.metadata?.userId, "canceled");
+      const userId = customer.metadata?.userId;
+      if (userId) {
+        await supabaseAdmin.from("profiles").update({ subscription_status: "canceled" }).eq("id", userId);
+      }
       break;
     }
+
     default:
       break;
   }

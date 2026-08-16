@@ -5,7 +5,10 @@ create table if not exists profiles (
   display_name text default 'Игрок',
   gender text default 'vessel_a',
   avatar_url text,
+  photo_saved_at timestamptz,
   subscription_status text default 'free', -- 'free' | 'active' | 'canceled'
+  plan text, -- 'monthly' | 'yearly'
+  paid_until timestamptz, -- used for the one-time yearly plan
   stripe_customer_id text,
   created_at timestamptz default now()
 );

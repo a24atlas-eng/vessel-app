@@ -5,9 +5,8 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).end();
-  const { userId, email } = req.body;
+  const { userId, email, plan } = req.body; // plan: 'monthly' | 'yearly'
 
-  // Reuse an existing Stripe customer if we already made one for this user.
   const { data: profile } = await supabaseAdmin
     .from("profiles")
     .select("stripe_customer_id")
@@ -21,13 +20,15 @@ export default async function handler(req, res) {
     await supabaseAdmin.from("profiles").update({ stripe_customer_id: customerId }).eq("id", userId);
   }
 
+  const isYearly = plan === "yearly";
+
   const session = await stripe.checkout.sessions.create({
-    mode: "subscription",
+    mode: isYearly ? "payment" : "subscription", // yearly = one-time payment, monthly = recurring subscription
     customer: customerId,
-    line_items: [{ price: process.env.STRIPE_PRICE_ID, quantity: 1 }],
+    line_items: [{ price: isYearly ? process.env.STRIPE_PRICE_ID_YEARLY : process.env.STRIPE_PRICE_ID_MONTHLY, quantity: 1 }],
     success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard?upgraded=1`,
     cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard`,
-    metadata: { userId },
+    metadata: { userId, plan: isYearly ? "yearly" : "monthly" },
   });
 
   res.status(200).json({ url: session.url });

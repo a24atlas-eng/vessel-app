@@ -34,7 +34,7 @@ export default function Dashboard() {
     setGoals(g || []);
   };
 
-  const isPaid = profile?.subscription_status === "active";
+  const isPaid = profile?.subscription_status === "active" || (profile?.paid_until && new Date(profile.paid_until) > new Date());
 
   const addItem = async (table, list, setList, label) => {
     if (!isPaid && list.length >= FREE_LIMIT) {
@@ -59,11 +59,21 @@ export default function Dashboard() {
     await supabase.from(table).update({ value }).eq("id", id);
   };
 
-  const goCheckout = async () => {
+  const goCheckout = async (plan) => {
     const res = await fetch("/api/create-checkout-session", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId: user.id, email: user.email }),
+      body: JSON.stringify({ userId: user.id, email: user.email, plan }),
+    });
+    const { url } = await res.json();
+    if (url) window.location.href = url;
+  };
+
+  const goManageBilling = async () => {
+    const res = await fetch("/api/create-portal-session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: user.id }),
     });
     const { url } = await res.json();
     if (url) window.location.href = url;
@@ -81,8 +91,24 @@ export default function Dashboard() {
     if (upErr) return alert("Не удалось загрузить фото: " + upErr.message);
     const { data } = supabase.storage.from("avatars").getPublicUrl(path);
     const url = `${data.publicUrl}?t=${Date.now()}`;
-    setProfile((p) => ({ ...p, avatar_url: url }));
-    await supabase.from("profiles").update({ avatar_url: url }).eq("id", user.id);
+    const savedAt = new Date().toISOString();
+    setProfile((p) => ({ ...p, avatar_url: url, photo_saved_at: savedAt }));
+    await supabase.from("profiles").update({ avatar_url: url, photo_saved_at: savedAt }).eq("id", user.id);
+  };
+
+  const downloadPhoto = async () => {
+    if (!profile?.avatar_url) return;
+    const res = await fetch(profile.avatar_url);
+    const blob = await res.blob();
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "vessel-avatar.jpg";
+    link.click();
+  };
+
+  const formatDate = (iso) => {
+    if (!iso) return null;
+    return new Date(iso).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
   };
 
   if (loading) return <div style={styles.loadingPage}>Загрузка…</div>;
@@ -155,10 +181,27 @@ export default function Dashboard() {
             <input type="file" accept="image/*" onChange={(e) => uploadPhoto(e.target.files[0])} style={{ display: "none" }} />
           </label>
 
+          {profile?.avatar_url && (
+            <div style={styles.photoSaveBlock}>
+              {profile?.photo_saved_at && (
+                <div style={styles.photoDate}>Сохранено: {formatDate(profile.photo_saved_at)}</div>
+              )}
+              <button style={styles.downloadBtn} onClick={downloadPhoto}>Save and download photo of your avatar</button>
+            </div>
+          )}
+
           {!isPaid ? (
-            <button style={styles.activateBtn} onClick={goCheckout}>UPGRADE — $4.99/МЕС</button>
+            <div style={styles.planRow}>
+              <button style={styles.activateBtn} onClick={() => goCheckout("monthly")}>ПОДПИСКА — €4.99/МЕС</button>
+              <button style={styles.activateBtnAlt} onClick={() => goCheckout("yearly")}>КУПИТЬ НА ГОД — €49 (разово)</button>
+            </div>
           ) : (
-            <button style={styles.activateBtn} onClick={() => alert("Активировано")}>ACTIVATE AVATAR</button>
+            <div style={styles.planRow}>
+              <button style={styles.activateBtn} onClick={() => alert("Активировано")}>ACTIVATE AVATAR</button>
+              {profile?.plan === "monthly" && (
+                <button style={styles.manageBtn} onClick={goManageBilling}>Управлять подпиской / отменить</button>
+              )}
+            </div>
           )}
         </div>
       </section>
@@ -262,6 +305,12 @@ const styles = {
   ctaText: { fontSize: 13, color: "#4a4360", marginBottom: 6 },
   ctaBold: { fontSize: 13, fontWeight: 700, marginBottom: 14 },
   uploadBtn: { display: "inline-block", padding: "8px 16px", borderRadius: 20, border: `1px solid ${PURPLE}`, color: PURPLE, fontSize: 12, fontWeight: 700, cursor: "pointer", marginBottom: 10 },
+  photoSaveBlock: { marginBottom: 14 },
+  photoDate: { fontSize: 11, color: "#8a83a3", marginBottom: 6 },
+  downloadBtn: { width: "100%", padding: 10, borderRadius: 10, border: `1px solid ${PURPLE}`, background: "#fff", color: PURPLE, fontSize: 11, fontWeight: 700, cursor: "pointer" },
+  planRow: { display: "flex", flexDirection: "column", gap: 8 },
+  activateBtnAlt: { display: "block", width: "100%", padding: 12, borderRadius: 12, border: `1.5px solid ${PURPLE}`, background: "#fff", color: PURPLE, fontWeight: 800, fontSize: 12, cursor: "pointer" },
+  manageBtn: { display: "block", width: "100%", padding: 10, borderRadius: 12, border: "1px solid #d8d2ea", background: "none", color: "#8a83a3", fontWeight: 600, fontSize: 11, cursor: "pointer" },
   activateBtn: { display: "block", width: "100%", padding: 14, borderRadius: 12, border: "none", background: `linear-gradient(90deg, ${PURPLE}, #ec4899)`, color: "#fff", fontWeight: 800, fontSize: 13, cursor: "pointer" },
   logout: { marginTop: 24, background: "none", border: "none", color: "#b0a9c4", fontSize: 12, cursor: "pointer" },
 };
