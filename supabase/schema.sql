@@ -18,6 +18,7 @@ create table if not exists core_programs (
   user_id uuid references auth.users(id) on delete cascade not null,
   label text not null,
   value int not null default 50,
+  pinned boolean not null default false,
   created_at timestamptz default now()
 );
 
@@ -26,6 +27,7 @@ create table if not exists goals (
   user_id uuid references auth.users(id) on delete cascade not null,
   label text not null,
   value int not null default 0,
+  pinned boolean not null default false,
   created_at timestamptz default now()
 );
 
