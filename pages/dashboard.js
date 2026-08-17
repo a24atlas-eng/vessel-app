@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import { supabase } from "../lib/supabaseClient";
 
-const FREE_LIMIT = 3;
+const FREE_LIMIT_BASE = 3;
 const MAX_PIN_PROGRAMS = 6;
 const MAX_PIN_GOALS = 3;
 const AVATAR_IMG = { vessel_a: "/avatars/female.jpg", vessel_b: "/avatars/male.jpg" };
@@ -29,6 +29,8 @@ export default function Dashboard() {
   const [nameDraft, setNameDraft] = useState("");
   const [onboardGender, setOnboardGender] = useState("vessel_a");
   const [view, setView] = useState("avatar"); // avatar | core | goals | pro
+  const [showProgress, setShowProgress] = useState(false);
+  const [progressData, setProgressData] = useState([]);
 
   useEffect(() => {
     (async () => {
@@ -53,10 +55,11 @@ export default function Dashboard() {
 
   const isPaid = profile?.subscription_status === "active" || (profile?.paid_until && new Date(profile.paid_until) > new Date());
   const needsOnboarding = profile && !profile.display_name;
+  const freeLimit = FREE_LIMIT_BASE + (profile?.bonus_slots || 0);
 
   const addItem = async (table, list, setList, label) => {
-    if (!isPaid && list.length >= FREE_LIMIT) {
-      alert(`Free plan allows ${FREE_LIMIT}. Upgrade to Pro for unlimited.`);
+    if (!isPaid && list.length >= freeLimit) {
+      alert(`Free plan allows ${freeLimit}. Invite a friend for +1, or upgrade to Pro for unlimited.`);
       setView("pro");
       return;
     }
@@ -78,6 +81,17 @@ export default function Dashboard() {
     await supabase.from(table).update({ value }).eq("id", id);
   };
 
+  const logHistory = async (table, id, list) => {
+    const item = list.find((i) => i.id === id);
+    if (!item) return;
+    await supabase.from("history").insert({
+      user_id: user.id,
+      kind: table === "goals" ? "goal" : "program",
+      label: item.label,
+      value: item.value,
+    });
+  };
+
   const togglePin = async (table, id, list, setList, max) => {
     const item = list.find((i) => i.id === id);
     const pinnedCount = list.filter((i) => i.pinned).length;
@@ -91,13 +105,21 @@ export default function Dashboard() {
   };
 
   const goCheckout = async (plan) => {
-    const res = await fetch("/api/create-checkout-session", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId: user.id, email: user.email, plan }),
-    });
-    const { url } = await res.json();
-    if (url) window.location.href = url;
+    try {
+      const res = await fetch("/api/create-checkout-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.id, email: user.email, plan }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.url) {
+        alert("Checkout error: " + (data.error || res.status));
+        return;
+      }
+      window.location.href = data.url;
+    } catch (err) {
+      alert("Checkout error: " + err.message);
+    }
   };
 
   const goManageBilling = async () => {
@@ -130,6 +152,19 @@ export default function Dashboard() {
       alert("Could not save your name: " + error.message);
       return;
     }
+    const refCode = typeof window !== "undefined" ? sessionStorage.getItem("vessel_ref") : null;
+    if (refCode) {
+      try {
+        await fetch("/api/apply-referral", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ newUserId: user.id, refCode }),
+        });
+      } catch (e) {
+        // non-critical, ignore
+      }
+      sessionStorage.removeItem("vessel_ref");
+    }
     await loadAll(user.id);
   };
 
@@ -139,6 +174,19 @@ export default function Dashboard() {
       el.style.opacity = "1";
       setTimeout(() => { el.style.opacity = "0"; }, 700);
     }
+  };
+
+  const openProgress = async () => {
+    const since = new Date();
+    since.setDate(since.getDate() - 30);
+    const { data } = await supabase
+      .from("history")
+      .select("value, created_at")
+      .eq("user_id", user.id)
+      .gte("created_at", since.toISOString())
+      .order("created_at");
+    setProgressData(data || []);
+    setShowProgress(true);
   };
 
   if (loading) return <div style={styles.loadingPage}>Loading…</div>;
@@ -185,6 +233,7 @@ export default function Dashboard() {
           pinnedPrograms={pinnedPrograms}
           pinnedGoals={pinnedGoals}
           onActivate={doActivate}
+          onOpenProgress={openProgress}
         />
       )}
 
@@ -195,6 +244,7 @@ export default function Dashboard() {
           onAdd={(label) => addItem("core_programs", programs, setPrograms, label)}
           onRemove={(id) => removeItem("core_programs", id, programs, setPrograms)}
           onChange={(id, v) => updateValue("core_programs", id, v, programs, setPrograms)}
+          onCommit={(id) => logHistory("core_programs", id, programs)}
           onPin={(id) => togglePin("core_programs", id, programs, setPrograms, MAX_PIN_PROGRAMS)}
           addLabel="ADD PROGRAM"
         />
@@ -207,6 +257,7 @@ export default function Dashboard() {
           onAdd={(label) => addItem("goals", goals, setGoals, label)}
           onRemove={(id) => removeItem("goals", id, goals, setGoals)}
           onChange={(id, v) => updateValue("goals", id, v, goals, setGoals)}
+          onCommit={(id) => logHistory("goals", id, goals)}
           onPin={(id) => togglePin("goals", id, goals, setGoals, MAX_PIN_GOALS)}
           addLabel="ADD GOAL"
         />
@@ -220,7 +271,13 @@ export default function Dashboard() {
           onSubscribeMonthly={() => goCheckout("monthly")}
           onBuyYearly={() => goCheckout("yearly")}
           onManage={goManageBilling}
+          referralLink={user ? `${typeof window !== "undefined" ? window.location.origin : ""}/login?ref=${user.id}` : ""}
+          bonusSlots={profile?.bonus_slots || 0}
         />
+      )}
+
+      {showProgress && (
+        <ProgressModal history={progressData} onClose={() => setShowProgress(false)} />
       )}
 
       {(view === "core" || view === "goals") && (
@@ -244,7 +301,7 @@ export default function Dashboard() {
   );
 }
 
-function AvatarView({ stageImg, pinnedPrograms, pinnedGoals, onActivate }) {
+function AvatarView({ stageImg, pinnedPrograms, pinnedGoals, onActivate, onOpenProgress }) {
   return (
     <div style={styles.stageWrap}>
       <div style={styles.bob}><Gem size={44} /></div>
@@ -283,11 +340,50 @@ function AvatarView({ stageImg, pinnedPrograms, pinnedGoals, onActivate }) {
         <Gem size={30} />
         <span style={styles.activateLabel}>ACTIVATE</span>
       </button>
+
+      <span style={styles.progressLink} onClick={onOpenProgress}>View progress</span>
     </div>
   );
 }
 
-function ManageList({ title, items, onAdd, onRemove, onChange, onPin, addLabel }) {
+function ProgressModal({ history, onClose }) {
+  // Average value per day, over the last 30 days.
+  const byDay = {};
+  history.forEach((h) => {
+    const day = h.created_at.slice(0, 10);
+    if (!byDay[day]) byDay[day] = [];
+    byDay[day].push(h.value);
+  });
+  const days = Object.keys(byDay).sort();
+  const points = days.map((d) => byDay[d].reduce((a, b) => a + b, 0) / byDay[d].length);
+
+  const w = 300, h = 140, pad = 10;
+  const path = points.length > 1
+    ? points.map((v, i) => {
+        const x = pad + (i / (points.length - 1)) * (w - pad * 2);
+        const y = h - pad - (v / 100) * (h - pad * 2);
+        return `${i === 0 ? "M" : "L"}${x},${y}`;
+      }).join(" ")
+    : "";
+
+  return (
+    <div style={styles.modalOverlay} onClick={onClose}>
+      <div style={styles.modalCard} onClick={(e) => e.stopPropagation()}>
+        <div style={styles.modalTitle}>Your progress · last 30 days</div>
+        {points.length > 1 ? (
+          <svg width={w} height={h} style={{ display: "block", margin: "10px 0" }}>
+            <path d={path} fill="none" stroke="#c084fc" strokeWidth="2" />
+          </svg>
+        ) : (
+          <p style={styles.proTextMuted}>Adjust a slider and come back — your trend will show up here.</p>
+        )}
+        <button style={styles.manageBtn} onClick={onClose}>Close</button>
+      </div>
+    </div>
+  );
+}
+
+function ManageList({ title, items, onAdd, onRemove, onChange, onCommit, onPin, addLabel }) {
   const [draft, setDraft] = useState("");
   return (
     <div style={styles.managePanel}>
@@ -299,7 +395,13 @@ function ManageList({ title, items, onAdd, onRemove, onChange, onPin, addLabel }
             <span style={styles.manageValue}>{i.value}%</span>
             <span onClick={() => onPin(i.id)} style={styles.pinStar}>{i.pinned ? "★" : "☆"}</span>
           </div>
-          <input type="range" min="0" max="100" value={i.value} onChange={(e) => onChange(i.id, Number(e.target.value))} style={styles.rangeInput} />
+          <input
+            type="range" min="0" max="100" value={i.value}
+            onChange={(e) => onChange(i.id, Number(e.target.value))}
+            onMouseUp={() => onCommit(i.id)}
+            onTouchEnd={() => onCommit(i.id)}
+            style={styles.rangeInput}
+          />
           <button onClick={() => onRemove(i.id)} style={styles.removeLink}>remove</button>
         </div>
       ))}
@@ -311,7 +413,17 @@ function ManageList({ title, items, onAdd, onRemove, onChange, onPin, addLabel }
   );
 }
 
-function ProView({ isPaid, plan, paidUntil, onSubscribeMonthly, onBuyYearly, onManage }) {
+function ProView({ isPaid, plan, paidUntil, onSubscribeMonthly, onBuyYearly, onManage, referralLink, bonusSlots }) {
+  const [copied, setCopied] = useState(false);
+  const share = async () => {
+    if (navigator.share) {
+      try { await navigator.share({ title: "Earth Simulator", url: referralLink }); } catch (e) {}
+    } else {
+      navigator.clipboard.writeText(referralLink);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    }
+  };
   return (
     <div style={styles.managePanel}>
       <div style={styles.manageTitle}>PRO</div>
@@ -320,12 +432,17 @@ function ProView({ isPaid, plan, paidUntil, onSubscribeMonthly, onBuyYearly, onM
           <p style={styles.proText}>You're on the {plan === "yearly" ? "Yearly" : "Monthly"} plan.</p>
           {plan === "yearly" && paidUntil && <p style={styles.proTextMuted}>Active until {new Date(paidUntil).toLocaleDateString("en-GB")}.</p>}
           {plan === "monthly" && <button style={styles.manageBtn} onClick={onManage}>Manage subscription / cancel</button>}
-        </>
-      ) : (
+        </>      ) : (
         <>
           <p style={styles.proText}>Unlock unlimited Core Programs and Goals.</p>
           <button style={styles.primaryBtn} onClick={onSubscribeMonthly}>SUBSCRIBE — €4.99/MONTH</button>
           <button style={styles.secondaryBtn} onClick={onBuyYearly}>BUY YEARLY — €49 (one-time)</button>
+
+          <div style={styles.inviteBox}>
+            <div style={styles.inviteTitle}>Invite a friend</div>
+            <p style={styles.proTextMuted}>Get +1 free slot for every friend who joins. {bonusSlots > 0 && `You've earned ${bonusSlots} so far.`}</p>
+            <button style={styles.secondaryBtn} onClick={share}>{copied ? "Link copied!" : "Share invite link"}</button>
+          </div>
         </>
       )}
     </div>
@@ -427,6 +544,9 @@ const styles = {
   activateControl: { display: "flex", flexDirection: "column", alignItems: "center", gap: 4, background: "none", border: "none", marginTop: 18, cursor: "pointer" },
   activateLabel: { fontSize: 10, letterSpacing: 1.5, color: "#e8dcff", fontWeight: 700 },
   activateFlash: { position: "fixed", inset: 0, background: "radial-gradient(circle, rgba(216,180,255,0.35), transparent 70%)", pointerEvents: "none", opacity: 0, transition: "opacity 0.3s", zIndex: 40 },
+  progressLink: { display: "block", textAlign: "center", marginTop: 10, fontSize: 11, color: "#a89bc9", textDecoration: "underline", cursor: "pointer" },
+  inviteBox: { marginTop: 24, paddingTop: 18, borderTop: "1px solid #3a3252" },
+  inviteTitle: { fontWeight: 800, fontSize: 13, marginBottom: 6 },
 
   managePanel: { padding: "6px 20px 20px" },
   manageTitle: { fontWeight: 800, fontSize: 15, letterSpacing: 1, marginBottom: 14 },
