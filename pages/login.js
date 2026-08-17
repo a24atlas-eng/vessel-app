@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import { supabase } from "../lib/supabaseClient";
 
@@ -9,6 +9,13 @@ export default function Login() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+
+  useEffect(() => {
+    if (router.query.ref) {
+      sessionStorage.setItem("vessel_ref", router.query.ref);
+      setMode("signup");
+    }
+  }, [router.query.ref]);
 
   const submit = async (e) => {
     e.preventDefault();
