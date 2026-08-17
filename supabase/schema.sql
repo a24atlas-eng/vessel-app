@@ -10,6 +10,8 @@ create table if not exists profiles (
   plan text, -- 'monthly' | 'yearly'
   paid_until timestamptz, -- used for the one-time yearly plan
   stripe_customer_id text,
+  referred_by uuid references auth.users(id),
+  bonus_slots int not null default 0, -- +1 per successful referral
   created_at timestamptz default now()
 );
 
@@ -31,10 +33,22 @@ create table if not exists goals (
   created_at timestamptz default now()
 );
 
+-- One row is added every time a program/goal value changes, so progress
+-- over time can be charted.
+create table if not exists history (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade not null,
+  kind text not null, -- 'program' | 'goal'
+  label text not null,
+  value int not null,
+  created_at timestamptz default now()
+);
+
 -- Row Level Security: every user can only ever see/edit their own rows.
 alter table profiles enable row level security;
 alter table core_programs enable row level security;
 alter table goals enable row level security;
+alter table history enable row level security;
 
 create policy "own profile" on profiles
   for all using (auth.uid() = id) with check (auth.uid() = id);
@@ -43,6 +57,9 @@ create policy "own core programs" on core_programs
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 create policy "own goals" on goals
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+create policy "own history" on history
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 -- Auto-create a profile row whenever someone signs up.
