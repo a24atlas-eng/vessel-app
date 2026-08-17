@@ -1,9 +1,23 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import { supabase } from "../lib/supabaseClient";
 
 const FREE_LIMIT = 3;
+const MAX_PIN_PROGRAMS = 6;
+const MAX_PIN_GOALS = 3;
 const AVATAR_IMG = { vessel_a: "/avatars/female.jpg", vessel_b: "/avatars/male.jpg" };
+const PURPLE = "#a855f7";
+
+// Fixed hex-style slot positions (as % of the stage container) for up to 6 pinned programs.
+const SLOTS = [
+  { x: 50, y: 6, align: "center" },   // 0 top, near crystal
+  { x: 14, y: 16, align: "left" },    // 1 upper-left
+  { x: 86, y: 16, align: "right" },   // 2 upper-right
+  { x: 6, y: 38, align: "left" },     // 3 mid-left
+  { x: 94, y: 38, align: "right" },   // 4 mid-right
+  { x: 50, y: 78, align: "center" },  // 5 bottom, near pedestal
+];
+const SLOT_LINES = [[0, 1], [0, 2], [1, 3], [2, 4], [3, 5], [4, 5], [1, 2]];
 
 export default function Dashboard() {
   const router = useRouter();
@@ -14,11 +28,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [nameDraft, setNameDraft] = useState("");
   const [onboardGender, setOnboardGender] = useState("vessel_a");
-  const [showBilling, setShowBilling] = useState(false);
-
-  const stageRef = useRef(null);
-  const programsRef = useRef(null);
-  const goalsRef = useRef(null);
+  const [view, setView] = useState("avatar"); // avatar | core | goals | pro
 
   useEffect(() => {
     (async () => {
@@ -46,8 +56,8 @@ export default function Dashboard() {
 
   const addItem = async (table, list, setList, label) => {
     if (!isPaid && list.length >= FREE_LIMIT) {
-      alert("You've reached the free limit of 3. Upgrade your plan to add more.");
-      setShowBilling(true);
+      alert(`Free plan allows ${FREE_LIMIT}. Upgrade to Pro for unlimited.`);
+      setView("pro");
       return;
     }
     const { data, error } = await supabase
@@ -66,6 +76,18 @@ export default function Dashboard() {
   const updateValue = async (table, id, value, list, setList) => {
     setList(list.map((i) => (i.id === id ? { ...i, value } : i)));
     await supabase.from(table).update({ value }).eq("id", id);
+  };
+
+  const togglePin = async (table, id, list, setList, max) => {
+    const item = list.find((i) => i.id === id);
+    const pinnedCount = list.filter((i) => i.pinned).length;
+    if (!item.pinned && pinnedCount >= max) {
+      alert(`You can pin up to ${max} on your avatar. Unpin one first.`);
+      return;
+    }
+    const newPinned = !item.pinned;
+    setList(list.map((i) => (i.id === id ? { ...i, pinned: newPinned } : i)));
+    await supabase.from(table).update({ pinned: newPinned }).eq("id", id);
   };
 
   const goCheckout = async (plan) => {
@@ -100,21 +122,6 @@ export default function Dashboard() {
     await supabase.from("profiles").update({ avatar_url: url, photo_saved_at: savedAt }).eq("id", user.id);
   };
 
-  const downloadPhoto = async () => {
-    if (!profile?.avatar_url) return;
-    const res = await fetch(profile.avatar_url);
-    const blob = await res.blob();
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = "vessel-avatar.jpg";
-    link.click();
-  };
-
-  const formatDate = (iso) => {
-    if (!iso) return null;
-    return new Date(iso).toLocaleString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
-  };
-
   const completeOnboarding = async () => {
     const name = nameDraft.trim();
     if (!name) return alert("Please enter a name.");
@@ -122,11 +129,19 @@ export default function Dashboard() {
     await supabase.from("profiles").update({ display_name: name, gender: onboardGender }).eq("id", user.id);
   };
 
-  const scrollTo = (ref) => ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const doActivate = () => {
+    const el = document.getElementById("activate-flash");
+    if (el) {
+      el.style.opacity = "1";
+      setTimeout(() => { el.style.opacity = "0"; }, 700);
+    }
+  };
 
   if (loading) return <div style={styles.loadingPage}>Loading…</div>;
 
   const stageImg = profile?.avatar_url || AVATAR_IMG[profile?.gender || "vessel_a"];
+  const pinnedPrograms = programs.filter((p) => p.pinned).slice(0, MAX_PIN_PROGRAMS);
+  const pinnedGoals = goals.filter((g) => g.pinned).slice(0, MAX_PIN_GOALS);
 
   return (
     <div style={styles.page}>
@@ -134,267 +149,305 @@ export default function Dashboard() {
         <div style={styles.modalOverlay}>
           <div style={styles.modalCard}>
             <div style={styles.modalTitle}>Name of the player</div>
-            <input
-              value={nameDraft}
-              onChange={(e) => setNameDraft(e.target.value)}
-              placeholder="Enter your name"
-              style={styles.input}
-              autoFocus
-            />
+            <input value={nameDraft} onChange={(e) => setNameDraft(e.target.value)} placeholder="Enter your name" style={styles.input} autoFocus />
             <div style={{ ...styles.modalTitle, marginTop: 16 }}>Choose your avatar</div>
             <div style={styles.avatarChoiceRow}>
               {["vessel_a", "vessel_b"].map((g) => (
-                <button
-                  key={g}
-                  onClick={() => setOnboardGender(g)}
-                  style={{ ...styles.avatarChoiceCard, borderColor: onboardGender === g ? "#7c3aed" : "#e4e0f0" }}
-                >
+                <button key={g} onClick={() => setOnboardGender(g)} style={{ ...styles.avatarChoiceCard, borderColor: onboardGender === g ? PURPLE : "#3a3252" }}>
                   <img src={AVATAR_IMG[g]} alt="" style={styles.avatarThumb} />
                   <span>{g === "vessel_a" ? "FEMALE" : "MALE"}</span>
-                  <span style={{ ...styles.radio, background: onboardGender === g ? "#7c3aed" : "transparent" }} />
                 </button>
               ))}
             </div>
-            <button style={{ ...styles.activateBtn, marginTop: 20 }} onClick={completeOnboarding}>Continue</button>
-          </div>
-        </div>
-      )}
-
-      {showBilling && (
-        <div style={styles.modalOverlay} onClick={() => setShowBilling(false)}>
-          <div style={styles.modalCard} onClick={(e) => e.stopPropagation()}>
-            {isPaid ? (
-              <>
-                <div style={styles.modalTitle}>Your plan</div>
-                <p style={styles.ctaText}>
-                  You're on the {profile?.plan === "yearly" ? "yearly" : "monthly"} plan.
-                  {profile?.plan === "yearly" && profile?.paid_until && (
-                    <> Active until {formatDate(profile.paid_until)}.</>
-                  )}
-                </p>
-                {profile?.plan === "monthly" && (
-                  <button style={styles.manageBtn} onClick={goManageBilling}>Manage subscription / cancel</button>
-                )}
-                <button style={styles.closeModalBtn} onClick={() => setShowBilling(false)}>Close</button>
-              </>
-            ) : (
-              <>
-                <div style={styles.modalTitle}>Upgrade your plan</div>
-                <p style={styles.ctaText}>Remove the 3-item limit on Core Programs and Goals.</p>
-                <div style={styles.planRow}>
-                  <button style={styles.activateBtn} onClick={() => goCheckout("monthly")}>SUBSCRIBE — €4.99/MONTH</button>
-                  <button style={styles.activateBtnAlt} onClick={() => goCheckout("yearly")}>BUY YEARLY — €49 (one-time)</button>
-                </div>
-                <button style={styles.closeModalBtn} onClick={() => setShowBilling(false)}>Not now</button>
-              </>
-            )}
+            <button style={{ ...styles.primaryBtn, marginTop: 20 }} onClick={completeOnboarding}>Continue</button>
           </div>
         </div>
       )}
 
       <header style={styles.header}>
-        <div style={styles.logo}>EARTH SIMULATOR</div>
-        <nav style={styles.nav}>
-          <span style={styles.navItem} onClick={() => scrollTo(stageRef)}>AVATAR</span>
-          <span style={styles.navItem} onClick={() => scrollTo(programsRef)}>CORE PROGRAMS</span>
-          <span style={styles.navItem} onClick={() => scrollTo(goalsRef)}>GOALS</span>
-        </nav>
+        <div style={styles.logoRow}>
+          <Gem size={20} />
+          <span style={styles.logoText}>EARTH SIMULATOR</span>
+        </div>
         <div style={styles.accountRow}>
           <div style={styles.avatarDot} />
           <span>{profile?.display_name || "Player"}</span>
-          {isPaid ? (
-            <button style={styles.premiumBadge} onClick={() => setShowBilling(true)}>PREMIUM</button>
-          ) : (
-            <button style={styles.upgradePill} onClick={() => setShowBilling(true)}>Upgrade Plan</button>
-          )}
         </div>
       </header>
 
-      <main style={styles.mainGrid} data-vessel-grid>
-        <div ref={programsRef}>
-          <Panel title="CORE PROGRAMS">
-            <p style={styles.panelLine}><b>What programs does your avatar have?</b></p>
-            <p style={styles.panelLine}>Choose what you want to strengthen.</p>
-            <p style={styles.panelLineMuted}>Examples: Confidence · Focus · Discipline · Creativity · Calm</p>
-            <p style={styles.panelLineMuted}>Set the intensity of each program.</p>
+      {view === "avatar" && (
+        <AvatarView
+          stageImg={stageImg}
+          pinnedPrograms={pinnedPrograms}
+          pinnedGoals={pinnedGoals}
+          onActivate={doActivate}
+        />
+      )}
 
-            <div style={{ marginTop: 14 }}>
-              {programs.map((i) => (
-                <SliderRow key={i.id} item={i} onChange={(v) => updateValue("core_programs", i.id, v, programs, setPrograms)} onRemove={() => removeItem("core_programs", i.id, programs, setPrograms)} />
-              ))}
-              <AddRow onAdd={(label) => addItem("core_programs", programs, setPrograms, label)} label="ADD PROGRAM" />
-              {!isPaid && (
-                <div style={styles.limitNote}>
-                  {programs.length}/{FREE_LIMIT} free
-                  {programs.length >= FREE_LIMIT && (
-                    <> · <span style={styles.limitLink} onClick={() => setShowBilling(true)}>Upgrade your plan</span></>
-                  )}
-                </div>
-              )}
-            </div>
-          </Panel>
-        </div>
+      {view === "core" && (
+        <ManageList
+          title="CORE PROGRAMS"
+          items={programs}
+          onAdd={(label) => addItem("core_programs", programs, setPrograms, label)}
+          onRemove={(id) => removeItem("core_programs", id, programs, setPrograms)}
+          onChange={(id, v) => updateValue("core_programs", id, v, programs, setPrograms)}
+          onPin={(id) => togglePin("core_programs", id, programs, setPrograms, MAX_PIN_PROGRAMS)}
+          addLabel="ADD PROGRAM"
+        />
+      )}
 
-        <div style={styles.stageCol} ref={stageRef}>
-          <div style={styles.stageCard}>
-            <img src={stageImg} alt="avatar" style={styles.stageImg} />
-          </div>
+      {view === "goals" && (
+        <ManageList
+          title="GOALS"
+          items={goals}
+          onAdd={(label) => addItem("goals", goals, setGoals, label)}
+          onRemove={(id) => removeItem("goals", id, goals, setGoals)}
+          onChange={(id, v) => updateValue("goals", id, v, goals, setGoals)}
+          onPin={(id) => togglePin("goals", id, goals, setGoals, MAX_PIN_GOALS)}
+          addLabel="ADD GOAL"
+        />
+      )}
 
-          <div style={styles.photoUtilRow}>
+      {view === "pro" && (
+        <ProView
+          isPaid={isPaid}
+          plan={profile?.plan}
+          paidUntil={profile?.paid_until}
+          onSubscribeMonthly={() => goCheckout("monthly")}
+          onBuyYearly={() => goCheckout("yearly")}
+          onManage={goManageBilling}
+        />
+      )}
+
+      {(view === "core" || view === "goals") && (
+        <div style={styles.settingsSection}>
+          <SettingsRow title="Your photo" subtitle="Upload a custom photo for your avatar">
             <label style={styles.uploadBtn}>
-              Upload your photo
+              Upload
               <input type="file" accept="image/*" onChange={(e) => uploadPhoto(e.target.files[0])} style={{ display: "none" }} />
             </label>
-            {profile?.avatar_url && (
-              <>
-                {profile?.photo_saved_at && <div style={styles.photoDate}>Saved: {formatDate(profile.photo_saved_at)}</div>}
-                <button style={styles.downloadBtn} onClick={downloadPhoto}>Download avatar photo</button>
-              </>
-            )}
-          </div>
+          </SettingsRow>
+          <SettingsRow title="Global Settings" subtitle="Notifications, language, units and more" arrow />
+          <SettingsRow title="About Earth Simulator" subtitle="Learn more about the simulator and how it works" arrow />
         </div>
-
-        <div ref={goalsRef}>
-          <Panel title="GOALS">
-            <p style={styles.panelLine}><b>What does your player want to experience?</b></p>
-            <p style={styles.panelLineMuted}>Add your goals and track your progress.</p>
-
-            <div style={{ marginTop: 14 }}>
-              {goals.map((i) => (
-                <ProgressRow key={i.id} item={i} onChange={(v) => updateValue("goals", i.id, v, goals, setGoals)} onRemove={() => removeItem("goals", i.id, goals, setGoals)} />
-              ))}
-              <AddRow onAdd={(label) => addItem("goals", goals, setGoals, label)} label="ADD GOAL" />
-              {!isPaid && (
-                <div style={styles.limitNote}>
-                  {goals.length}/{FREE_LIMIT} free
-                  {goals.length >= FREE_LIMIT && (
-                    <> · <span style={styles.limitLink} onClick={() => setShowBilling(true)}>Upgrade your plan</span></>
-                  )}
-                </div>
-              )}
-            </div>
-          </Panel>
-        </div>
-      </main>
-
-      <section style={styles.bottomGrid}>
-        <div style={styles.ctaCard}>
-          <div style={{ ...styles.panelTitle, color: "#7c3aed" }}>YOUR AVATAR IS YOU</div>
-          <p style={styles.ctaText}>Your avatar is a reflection of your inner programs and your goals.</p>
-          <p style={styles.ctaText}>Design it. Program it. Activate it.</p>
-          <p style={styles.ctaBold}>You are the player. Your life is the game.</p>
-          <button style={styles.activateBtn} onClick={() => alert("Activated")}>ACTIVATE AVATAR</button>
-        </div>
-      </section>
+      )}
 
       <button style={styles.logout} onClick={async () => { await supabase.auth.signOut(); router.push("/login"); }}>Log out</button>
+
+      <BottomNav view={view} setView={setView} onActivate={doActivate} isPaid={isPaid} />
+      <div id="activate-flash" style={styles.activateFlash} />
     </div>
   );
 }
 
-function Panel({ title, children }) {
+function AvatarView({ stageImg, pinnedPrograms, pinnedGoals, onActivate }) {
   return (
-    <div style={styles.sidePanel}>
-      <div style={styles.panelTitle}>{title}</div>
-      {children}
+    <div style={styles.stageWrap}>
+      <div style={styles.bob}><Gem size={44} /></div>
+
+      <div style={styles.stageCard}>
+        <img src={stageImg} alt="avatar" style={styles.stageImg} />
+
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={styles.constellationSvg}>
+          {SLOT_LINES.filter(([a, b]) => a < pinnedPrograms.length && b < pinnedPrograms.length).map(([a, b], i) => (
+            <line key={i} x1={SLOTS[a].x} y1={SLOTS[a].y} x2={SLOTS[b].x} y2={SLOTS[b].y} stroke="rgba(216,180,255,0.45)" strokeWidth="0.3" />
+          ))}
+        </svg>
+
+        {pinnedPrograms.map((p, i) => {
+          const slot = SLOTS[i];
+          return (
+            <div key={p.id} style={{ position: "absolute", left: `${slot.x}%`, top: `${slot.y}%`, transform: `translate(${slot.align === "left" ? "-2%" : slot.align === "right" ? "-98%" : "-50%"}, -50%)`, textAlign: slot.align, minWidth: 90 }}>
+              <div style={styles.slotLabel}>{p.label}</div>
+              <div style={styles.slotValue}>{p.value}%</div>
+            </div>
+          );
+        })}
+      </div>
+
+      {pinnedGoals.length > 0 && (
+        <div style={styles.pinnedGoalsRow}>
+          {pinnedGoals.map((g) => (
+            <div key={g.id} style={styles.pinnedGoal}>
+              <div style={styles.pinnedGoalLabel}>{g.label.toUpperCase()}</div>
+              <div style={styles.pinnedGoalValue}>{g.value}%</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <button style={styles.activateControl} onClick={onActivate}>
+        <Gem size={30} />
+        <span style={styles.activateLabel}>ACTIVATE</span>
+      </button>
     </div>
   );
 }
 
-function SliderRow({ item, onChange, onRemove }) {
-  return (
-    <div style={styles.row}>
-      <div style={styles.rowTop}>
-        <span>{item.label}</span>
-        <span>{item.value}%</span>
-      </div>
-      <div style={styles.sliderLine}>
-        <input type="range" min="0" max="100" value={item.value} onChange={(e) => onChange(Number(e.target.value))} style={styles.rangeInput} />
-      </div>
-      <button onClick={onRemove} style={styles.rowRemove}>remove</button>
-    </div>
-  );
-}
-
-function ProgressRow({ item, onChange, onRemove }) {
-  return (
-    <div style={styles.row}>
-      <div style={styles.rowTop}>
-        <span>{item.label}</span>
-        <span>{item.value}%</span>
-      </div>
-      <div style={styles.progressTrack}>
-        <div style={{ ...styles.progressFill, width: `${item.value}%` }} />
-      </div>
-      <input type="range" min="0" max="100" value={item.value} onChange={(e) => onChange(Number(e.target.value))} style={styles.rangeInputHidden} />
-      <button onClick={onRemove} style={styles.rowRemove}>remove</button>
-    </div>
-  );
-}
-
-function AddRow({ onAdd, label }) {
+function ManageList({ title, items, onAdd, onRemove, onChange, onPin, addLabel }) {
   const [draft, setDraft] = useState("");
   return (
-    <div style={styles.addRow}>
-      <input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder={label} style={styles.addInput} />
-      <button onClick={() => { if (draft.trim()) { onAdd(draft.trim()); setDraft(""); } }} style={styles.addBtn}>+ {label}</button>
+    <div style={styles.managePanel}>
+      <div style={styles.manageTitle}>{title}</div>
+      {items.map((i) => (
+        <div key={i.id} style={styles.manageRow}>
+          <div style={styles.manageRowTop}>
+            <span style={styles.manageLabel}>{i.label}</span>
+            <span style={styles.manageValue}>{i.value}%</span>
+            <span onClick={() => onPin(i.id)} style={styles.pinStar}>{i.pinned ? "★" : "☆"}</span>
+          </div>
+          <input type="range" min="0" max="100" value={i.value} onChange={(e) => onChange(i.id, Number(e.target.value))} style={styles.rangeInput} />
+          <button onClick={() => onRemove(i.id)} style={styles.removeLink}>remove</button>
+        </div>
+      ))}
+      <div style={styles.addRow}>
+        <input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder={addLabel} style={styles.addInput} />
+        <button onClick={() => { if (draft.trim()) { onAdd(draft.trim()); setDraft(""); } }} style={styles.addBtn}>+ {addLabel}</button>
+      </div>
     </div>
   );
 }
 
-const PURPLE = "#7c3aed";
+function ProView({ isPaid, plan, paidUntil, onSubscribeMonthly, onBuyYearly, onManage }) {
+  return (
+    <div style={styles.managePanel}>
+      <div style={styles.manageTitle}>PRO</div>
+      {isPaid ? (
+        <>
+          <p style={styles.proText}>You're on the {plan === "yearly" ? "Yearly" : "Monthly"} plan.</p>
+          {plan === "yearly" && paidUntil && <p style={styles.proTextMuted}>Active until {new Date(paidUntil).toLocaleDateString("en-GB")}.</p>}
+          {plan === "monthly" && <button style={styles.manageBtn} onClick={onManage}>Manage subscription / cancel</button>}
+        </>
+      ) : (
+        <>
+          <p style={styles.proText}>Unlock unlimited Core Programs and Goals.</p>
+          <button style={styles.primaryBtn} onClick={onSubscribeMonthly}>SUBSCRIBE — €4.99/MONTH</button>
+          <button style={styles.secondaryBtn} onClick={onBuyYearly}>BUY YEARLY — €49 (one-time)</button>
+        </>
+      )}
+    </div>
+  );
+}
+
+function SettingsRow({ title, subtitle, children, arrow }) {
+  return (
+    <div style={styles.settingsRow}>
+      <div>
+        <div style={styles.settingsTitle}>{title}</div>
+        <div style={styles.settingsSub}>{subtitle}</div>
+      </div>
+      {children}
+      {arrow && <span style={styles.settingsArrow}>›</span>}
+    </div>
+  );
+}
+
+function BottomNav({ view, setView, onActivate, isPaid }) {
+  const items = [
+    { key: "avatar", label: "AVATAR", icon: <Gem size={18} /> },
+    { key: "core", label: "CORE", icon: <span style={{ fontSize: 16 }}>≡</span> },
+    { key: "activateBtn", label: "ACTIVATE", icon: <Gem size={20} />, isAction: true },
+    { key: "goals", label: "GOALS", icon: <span style={{ fontSize: 16 }}>◎</span> },
+    { key: "pro", label: "PRO", icon: <span style={{ fontSize: 14 }}>{isPaid ? "🔓" : "🔒"}</span> },
+  ];
+  return (
+    <nav style={styles.bottomNav}>
+      {items.map((it) => (
+        <button
+          key={it.key}
+          onClick={() => (it.isAction ? onActivate() : setView(it.key))}
+          style={{ ...styles.navBtn, color: view === it.key ? PURPLE : "#8a80a8" }}
+        >
+          {it.icon}
+          <span style={styles.navBtnLabel}>{it.label}</span>
+        </button>
+      ))}
+    </nav>
+  );
+}
+
+function Gem({ size = 24 }) {
+  return (
+    <svg width={size} height={size * 1.2} viewBox="0 0 42 52">
+      <defs>
+        <linearGradient id="gemGrad" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#ff8fd0" />
+          <stop offset="100%" stopColor="#9fd4ff" />
+        </linearGradient>
+        <filter id="gemGlowF" x="-60%" y="-60%" width="220%" height="220%">
+          <feGaussianBlur stdDeviation="2" result="b" />
+          <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+        </filter>
+      </defs>
+      <polygon points="21,2 40,26 21,50 2,26" fill="none" stroke="url(#gemGrad)" strokeWidth="1.6" filter="url(#gemGlowF)" />
+      <polygon points="21,14 30,26 21,38 12,26" fill="url(#gemGrad)" opacity="0.9" />
+    </svg>
+  );
+}
+
 const styles = {
-  loadingPage: { minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "sans-serif", color: "#3a3255" },
-  page: { minHeight: "100vh", background: "#f4f2fb", fontFamily: "'Segoe UI', sans-serif", color: "#241f38", padding: "20px 24px 60px" },
-  header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, flexWrap: "wrap", gap: 12 },
-  logo: { fontWeight: 800, fontSize: 15, letterSpacing: 1 },
-  nav: { display: "flex", gap: 24, fontSize: 12, letterSpacing: 1, fontWeight: 600 },
-  navItem: { color: "#6b6485", cursor: "pointer" },
+  loadingPage: { minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "sans-serif", color: "#e8dcff", background: "#1a1030" },
+  page: { minHeight: "100vh", background: "linear-gradient(180deg,#160c2c,#241a42 40%,#5a2f5e 75%,#a85b60 100%)", color: "#f0eaff", fontFamily: "'Segoe UI', sans-serif", paddingBottom: 90 },
+  header: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "18px 20px 10px" },
+  logoRow: { display: "flex", alignItems: "center", gap: 8 },
+  logoText: { fontSize: 12, letterSpacing: 2, fontWeight: 700 },
   accountRow: { display: "flex", alignItems: "center", gap: 8, fontSize: 13 },
-  avatarDot: { width: 26, height: 26, borderRadius: "50%", background: `linear-gradient(135deg, ${PURPLE}, #ec4899)` },
-  premiumBadge: { fontSize: 10, background: PURPLE, color: "#fff", padding: "3px 10px", borderRadius: 10, border: "none", cursor: "pointer", fontWeight: 700 },
-  upgradePill: { fontSize: 10, background: "none", border: `1px solid ${PURPLE}`, color: PURPLE, padding: "3px 10px", borderRadius: 10, cursor: "pointer", fontWeight: 700 },
-  mainGrid: { display: "grid", gridTemplateColumns: "1fr", gap: 16 },
-  sidePanel: { background: "#fff", borderRadius: 16, padding: 20, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" },
-  panelTitle: { fontWeight: 800, fontSize: 16, marginBottom: 10 },
-  panelLine: { fontSize: 13, color: "#241f38", margin: "0 0 4px" },
-  panelLineMuted: { fontSize: 11, color: "#8a83a3", margin: "0 0 4px", lineHeight: 1.4 },
-  row: { marginBottom: 14 },
-  rowTop: { display: "flex", justifyContent: "space-between", fontSize: 12, fontWeight: 700, marginBottom: 4 },
-  sliderLine: { marginBottom: 2 },
-  rangeInput: { width: "100%", accentColor: PURPLE },
-  rangeInputHidden: { width: "100%", accentColor: PURPLE, marginTop: -4 },
-  progressTrack: { height: 5, background: "#ece8f7", borderRadius: 4, overflow: "hidden", marginBottom: 2 },
-  progressFill: { height: "100%", background: `linear-gradient(90deg, ${PURPLE}, #a855f7)` },
-  rowRemove: { background: "none", border: "none", color: "#b0a9c4", fontSize: 10, cursor: "pointer", padding: 0 },
-  addRow: { display: "flex", flexDirection: "column", gap: 6, marginTop: 10 },
-  addInput: { padding: 8, borderRadius: 8, border: "1px solid #e4e0f0", fontSize: 12 },
-  addBtn: { padding: 10, borderRadius: 10, border: `1px dashed ${PURPLE}`, background: "#f4f0fd", color: PURPLE, fontSize: 12, fontWeight: 700, cursor: "pointer" },
-  limitNote: { fontSize: 11, color: "#b0a9c4", marginTop: 8, textAlign: "center" },
-  limitLink: { color: PURPLE, cursor: "pointer", fontWeight: 700 },
-  stageCol: { display: "flex", flexDirection: "column", alignItems: "center", gap: 12, scrollMarginTop: 24 },
-  stageCard: { borderRadius: 20, overflow: "hidden", width: "100%", maxWidth: 420, boxShadow: "0 4px 20px rgba(0,0,0,0.12)" },
+  avatarDot: { width: 24, height: 24, borderRadius: "50%", background: `linear-gradient(135deg, ${PURPLE}, #ec4899)` },
+
+  stageWrap: { padding: "6px 20px 20px", display: "flex", flexDirection: "column", alignItems: "center" },
+  bob: { marginBottom: -6, zIndex: 2, animation: "bob 4s ease-in-out infinite" },
+  stageCard: { position: "relative", width: "100%", maxWidth: 420, borderRadius: 20, overflow: "hidden", boxShadow: "0 10px 40px rgba(0,0,0,0.4)" },
   stageImg: { width: "100%", display: "block" },
-  photoUtilRow: { display: "flex", flexDirection: "column", alignItems: "center", gap: 6, width: "100%", maxWidth: 300 },
-  bottomGrid: { display: "grid", gridTemplateColumns: "1fr", gap: 16, marginTop: 16 },
-  avatarChoiceRow: { display: "flex", gap: 12, marginTop: 8, flexWrap: "wrap" },
-  avatarChoiceCard: { display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: 12, borderRadius: 12, border: "1.5px solid", background: "#faf9fe", cursor: "pointer", fontSize: 11, fontWeight: 700, width: 110 },
+  constellationSvg: { position: "absolute", inset: 0, width: "100%", height: "100%" },
+  slotLabel: { fontSize: 11, letterSpacing: 0.5, color: "#f0eaff", textShadow: "0 0 6px rgba(216,180,255,0.8)" },
+  slotValue: { fontSize: 13, fontWeight: 800, color: PURPLE, textShadow: "0 0 8px rgba(168,85,247,0.8)" },
+
+  pinnedGoalsRow: { display: "flex", justifyContent: "center", gap: 24, flexWrap: "wrap", marginTop: 14 },
+  pinnedGoal: { textAlign: "center" },
+  pinnedGoalLabel: { fontSize: 10, letterSpacing: 0.5, color: "#d9c8ff" },
+  pinnedGoalValue: { fontSize: 14, fontWeight: 800, color: PURPLE },
+
+  activateControl: { display: "flex", flexDirection: "column", alignItems: "center", gap: 4, background: "none", border: "none", marginTop: 18, cursor: "pointer" },
+  activateLabel: { fontSize: 10, letterSpacing: 1.5, color: "#e8dcff", fontWeight: 700 },
+  activateFlash: { position: "fixed", inset: 0, background: "radial-gradient(circle, rgba(216,180,255,0.35), transparent 70%)", pointerEvents: "none", opacity: 0, transition: "opacity 0.3s", zIndex: 40 },
+
+  managePanel: { padding: "6px 20px 20px" },
+  manageTitle: { fontWeight: 800, fontSize: 15, letterSpacing: 1, marginBottom: 14 },
+  manageRow: { marginBottom: 16 },
+  manageRowTop: { display: "flex", alignItems: "center", gap: 8, fontSize: 13, marginBottom: 4 },
+  manageLabel: { flex: 1 },
+  manageValue: { color: PURPLE, fontWeight: 700 },
+  pinStar: { color: PURPLE, fontSize: 16, cursor: "pointer" },
+  rangeInput: { width: "100%", accentColor: PURPLE },
+  removeLink: { background: "none", border: "none", color: "#8a80a8", fontSize: 10, cursor: "pointer", padding: 0, marginTop: 2 },
+  addRow: { display: "flex", flexDirection: "column", gap: 8, marginTop: 12 },
+  addInput: { padding: 10, borderRadius: 8, border: "1px solid #3a3252", background: "rgba(255,255,255,0.05)", color: "#f0eaff", fontSize: 13 },
+  addBtn: { padding: 10, borderRadius: 10, border: `1px dashed ${PURPLE}`, background: "rgba(168,85,247,0.1)", color: PURPLE, fontSize: 12, fontWeight: 700, cursor: "pointer" },
+
+  proText: { fontSize: 13, color: "#e8dcff", marginBottom: 10 },
+  proTextMuted: { fontSize: 11, color: "#a89bc9", marginBottom: 10 },
+  primaryBtn: { display: "block", width: "100%", padding: 14, borderRadius: 12, border: "none", background: `linear-gradient(90deg, ${PURPLE}, #ec4899)`, color: "#fff", fontWeight: 800, fontSize: 13, cursor: "pointer", marginBottom: 10 },
+  secondaryBtn: { display: "block", width: "100%", padding: 12, borderRadius: 12, border: `1.5px solid ${PURPLE}`, background: "none", color: PURPLE, fontWeight: 800, fontSize: 12, cursor: "pointer" },
+  manageBtn: { display: "block", width: "100%", padding: 10, borderRadius: 12, border: "1px solid #3a3252", background: "none", color: "#a89bc9", fontWeight: 600, fontSize: 11, cursor: "pointer" },
+
+  settingsSection: { padding: "0 20px 10px" },
+  settingsRow: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", background: "rgba(255,255,255,0.04)", borderRadius: 12, marginBottom: 10 },
+  settingsTitle: { fontSize: 13, fontWeight: 700 },
+  settingsSub: { fontSize: 11, color: "#a89bc9", marginTop: 2 },
+  settingsArrow: { color: "#a89bc9", fontSize: 18 },
+  uploadBtn: { padding: "6px 14px", borderRadius: 16, border: `1px solid ${PURPLE}`, color: PURPLE, fontSize: 11, fontWeight: 700, cursor: "pointer" },
+
+  logout: { display: "block", margin: "10px auto", background: "none", border: "none", color: "#8a80a8", fontSize: 12, cursor: "pointer" },
+
+  bottomNav: { position: "fixed", bottom: 0, left: 0, right: 0, display: "flex", justifyContent: "space-around", alignItems: "center", background: "rgba(15,9,28,0.92)", backdropFilter: "blur(10px)", borderTop: "1px solid rgba(255,255,255,0.08)", padding: "10px 6px calc(10px + env(safe-area-inset-bottom))", zIndex: 30 },
+  navBtn: { display: "flex", flexDirection: "column", alignItems: "center", gap: 3, background: "none", border: "none", cursor: "pointer" },
+  navBtnLabel: { fontSize: 9, letterSpacing: 0.5, fontWeight: 700 },
+
+  modalOverlay: { position: "fixed", inset: 0, background: "rgba(10,6,20,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 16 },
+  modalCard: { background: "#1e1436", borderRadius: 18, padding: 28, width: 340, maxWidth: "100%", border: "1px solid #3a3252" },
+  modalTitle: { fontWeight: 800, fontSize: 14, marginBottom: 10, color: "#f0eaff" },
+  input: { width: "100%", padding: 10, borderRadius: 8, border: "1px solid #3a3252", background: "rgba(255,255,255,0.05)", color: "#f0eaff", fontSize: 13, boxSizing: "border-box" },
+  avatarChoiceRow: { display: "flex", gap: 12, marginTop: 8 },
+  avatarChoiceCard: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: 12, borderRadius: 12, border: "1.5px solid", background: "rgba(255,255,255,0.03)", cursor: "pointer", fontSize: 11, fontWeight: 700, color: "#f0eaff" },
   avatarThumb: { width: 56, height: 90, objectFit: "cover", borderRadius: 8 },
-  radio: { width: 14, height: 14, borderRadius: "50%", border: `1.5px solid ${PURPLE}` },
-  ctaCard: { background: "#f4f0fd", borderRadius: 16, padding: 20, textAlign: "center" },
-  ctaText: { fontSize: 13, color: "#4a4360", marginBottom: 6 },
-  ctaBold: { fontSize: 13, fontWeight: 700, marginBottom: 14 },
-  uploadBtn: { display: "inline-block", padding: "8px 16px", borderRadius: 20, border: `1px solid ${PURPLE}`, color: PURPLE, fontSize: 12, fontWeight: 700, cursor: "pointer" },
-  photoDate: { fontSize: 11, color: "#8a83a3" },
-  downloadBtn: { width: "100%", padding: 10, borderRadius: 10, border: `1px solid ${PURPLE}`, background: "#fff", color: PURPLE, fontSize: 11, fontWeight: 700, cursor: "pointer" },
-  planRow: { display: "flex", flexDirection: "column", gap: 8, marginTop: 12 },
-  activateBtnAlt: { display: "block", width: "100%", padding: 12, borderRadius: 12, border: `1.5px solid ${PURPLE}`, background: "#fff", color: PURPLE, fontWeight: 800, fontSize: 12, cursor: "pointer" },
-  manageBtn: { display: "block", width: "100%", padding: 10, borderRadius: 12, border: "1px solid #d8d2ea", background: "none", color: "#8a83a3", fontWeight: 600, fontSize: 11, cursor: "pointer", marginTop: 10 },
-  activateBtn: { display: "block", width: "100%", padding: 14, borderRadius: 12, border: "none", background: `linear-gradient(90deg, ${PURPLE}, #ec4899)`, color: "#fff", fontWeight: 800, fontSize: 13, cursor: "pointer", marginTop: 4 },
-  logout: { marginTop: 24, background: "none", border: "none", color: "#b0a9c4", fontSize: 12, cursor: "pointer" },
-  modalOverlay: { position: "fixed", inset: 0, background: "rgba(20,14,35,0.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 16 },
-  modalCard: { background: "#fff", borderRadius: 18, padding: 28, width: 340, maxWidth: "100%" },
-  modalTitle: { fontWeight: 800, fontSize: 14, marginBottom: 10 },
-  input: { width: "100%", padding: 10, borderRadius: 8, border: "1px solid #e4e0f0", fontSize: 13, boxSizing: "border-box" },
-  closeModalBtn: { display: "block", width: "100%", padding: 10, marginTop: 10, background: "none", border: "none", color: "#8a83a3", fontSize: 12, cursor: "pointer" },
 };
