@@ -125,8 +125,12 @@ export default function Dashboard() {
   const completeOnboarding = async () => {
     const name = nameDraft.trim();
     if (!name) return alert("Please enter a name.");
-    setProfile((p) => ({ ...p, display_name: name, gender: onboardGender }));
-    await supabase.from("profiles").update({ display_name: name, gender: onboardGender }).eq("id", user.id);
+    const { error } = await supabase.from("profiles").update({ display_name: name, gender: onboardGender }).eq("id", user.id);
+    if (error) {
+      alert("Could not save your name: " + error.message);
+      return;
+    }
+    await loadAll(user.id);
   };
 
   const doActivate = () => {
@@ -171,7 +175,7 @@ export default function Dashboard() {
         </div>
         <div style={styles.accountRow}>
           <div style={styles.avatarDot} />
-          <span>{profile?.display_name || "Player"}</span>
+          <span>{profile?.display_name ? `Player ${profile.display_name}` : "Player"}</span>
         </div>
       </header>
 
@@ -263,18 +267,17 @@ function AvatarView({ stageImg, pinnedPrograms, pinnedGoals, onActivate }) {
             </div>
           );
         })}
+        {pinnedGoals.length > 0 && (
+          <div style={styles.pinnedGoalsOverlay}>
+            {pinnedGoals.map((g) => (
+              <div key={g.id} style={styles.pinnedGoal}>
+                <div style={styles.pinnedGoalLabel}>{g.label}</div>
+                <div style={styles.pinnedGoalValue}>{g.value}%</div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
-
-      {pinnedGoals.length > 0 && (
-        <div style={styles.pinnedGoalsRow}>
-          {pinnedGoals.map((g) => (
-            <div key={g.id} style={styles.pinnedGoal}>
-              <div style={styles.pinnedGoalLabel}>{g.label.toUpperCase()}</div>
-              <div style={styles.pinnedGoalValue}>{g.value}%</div>
-            </div>
-          ))}
-        </div>
-      )}
 
       <button style={styles.activateControl} onClick={onActivate}>
         <Gem size={30} />
@@ -348,7 +351,7 @@ function BottomNav({ view, setView, onActivate, isPaid }) {
     { key: "core", label: "CORE", icon: <span style={{ fontSize: 16 }}>≡</span> },
     { key: "activateBtn", label: "ACTIVATE", icon: <Gem size={20} />, isAction: true },
     { key: "goals", label: "GOALS", icon: <span style={{ fontSize: 16 }}>◎</span> },
-    { key: "pro", label: "PRO", icon: <span style={{ fontSize: 14 }}>{isPaid ? "🔓" : "🔒"}</span> },
+    { key: "pro", label: "PRO", icon: <LockIcon locked={!isPaid} /> },
   ];
   return (
     <nav style={styles.bottomNav}>
@@ -363,6 +366,20 @@ function BottomNav({ view, setView, onActivate, isPaid }) {
         </button>
       ))}
     </nav>
+  );
+}
+
+function LockIcon({ locked }) {
+  return (
+    <svg width="16" height="18" viewBox="0 0 24 26" fill="none">
+      <rect x="4" y="11" width="16" height="13" rx="3" stroke="#e8dcff" strokeWidth="1.6" />
+      {locked ? (
+        <path d="M8 11V8a4 4 0 0 1 8 0v3" stroke="#e8dcff" strokeWidth="1.6" fill="none" />
+      ) : (
+        <path d="M8 11V8a4 4 0 0 1 7-2.6" stroke="#e8dcff" strokeWidth="1.6" fill="none" />
+      )}
+      <circle cx="12" cy="17.5" r="1.6" fill="#e8dcff" />
+    </svg>
   );
 }
 
@@ -402,10 +419,10 @@ const styles = {
   slotLabel: { fontSize: 11, letterSpacing: 0.5, color: "#f0eaff", textShadow: "0 0 6px rgba(216,180,255,0.8)" },
   slotValue: { fontSize: 13, fontWeight: 800, color: PURPLE, textShadow: "0 0 8px rgba(168,85,247,0.8)" },
 
-  pinnedGoalsRow: { display: "flex", justifyContent: "center", gap: 24, flexWrap: "wrap", marginTop: 14 },
+  pinnedGoalsOverlay: { position: "absolute", left: 0, right: 0, bottom: "9%", display: "flex", justifyContent: "space-evenly", gap: 8, padding: "0 12px" },
   pinnedGoal: { textAlign: "center" },
-  pinnedGoalLabel: { fontSize: 10, letterSpacing: 0.5, color: "#d9c8ff" },
-  pinnedGoalValue: { fontSize: 14, fontWeight: 800, color: PURPLE },
+  pinnedGoalLabel: { fontSize: 10, letterSpacing: 0.5, color: "#f0eaff", textShadow: "0 0 6px rgba(216,180,255,0.9)" },
+  pinnedGoalValue: { fontSize: 15, fontWeight: 900, color: "#c084fc", textShadow: "0 0 14px rgba(192,132,252,1), 0 0 4px rgba(192,132,252,1)" },
 
   activateControl: { display: "flex", flexDirection: "column", alignItems: "center", gap: 4, background: "none", border: "none", marginTop: 18, cursor: "pointer" },
   activateLabel: { fontSize: 10, letterSpacing: 1.5, color: "#e8dcff", fontWeight: 700 },
