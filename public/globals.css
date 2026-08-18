@@ -12,3 +12,8 @@
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-8px); }
 }
+
+@keyframes activatePulse {
+  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 10px rgba(192,132,252,0.7)) drop-shadow(0 0 22px rgba(168,85,247,0.45)); }
+  50% { transform: scale(1.08); filter: drop-shadow(0 0 18px rgba(216,180,255,0.95)) drop-shadow(0 0 34px rgba(168,85,247,0.7)); }
+}
