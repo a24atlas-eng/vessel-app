@@ -14,13 +14,13 @@ const SLOTS = [
   { x: 50, y: 9, align: "center" },   // 0 outer top apex, near the crystal
   { x: 20, y: 19, align: "left" },    // 1 outer upper-left
   { x: 80, y: 19, align: "right" },   // 2 outer upper-right
-  { x: 9, y: 41, align: "left" },     // 3 outer mid-left
-  { x: 91, y: 41, align: "right" },   // 4 outer mid-right
+  { x: 9, y: 38, align: "left" },     // 3 outer mid-left
+  { x: 91, y: 38, align: "right" },   // 4 outer mid-right
   { x: 50, y: 80, align: "center" },  // 5 outer bottom, near pedestal
   { x: 38, y: 26, align: "right" },   // 6 inner upper-left (near collar)
   { x: 62, y: 26, align: "left" },    // 7 inner upper-right (near collar)
-  { x: 30, y: 44, align: "right" },   // 8 inner mid-left (near shoulder/arm)
-  { x: 70, y: 44, align: "left" },    // 9 inner mid-right (near shoulder/arm)
+  { x: 27, y: 49, align: "right" },   // 8 inner mid-left (near shoulder/arm)
+  { x: 73, y: 49, align: "left" },    // 9 inner mid-right (near shoulder/arm)
   { x: 35, y: 62, align: "right" },   // 10 inner lower-left (near waist)
   { x: 65, y: 62, align: "left" },    // 11 inner lower-right (near waist)
 ];
