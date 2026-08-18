@@ -613,7 +613,7 @@ function SettingsRow({ title, subtitle, children, arrow }) {
 
 function BottomNav({ view, setView, onActivate, isPaid }) {
   const items = [
-    { key: "memories", label: "MEMO", icon: <span style={{ fontSize: 16 }}>✧</span> },
+    { key: "memories", label: "MEMO", icon: <span style={{ fontSize: 22, lineHeight: 1 }}>✧</span> },
     { key: "core", label: "CORE", icon: <span style={{ fontSize: 16 }}>≡</span> },
     { key: "avatar", label: "AVATAR", icon: <Gem size={20} /> },
     { key: "goals", label: "GOALS", icon: <span style={{ fontSize: 16 }}>◎</span> },
