@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabaseClient";
 const FREE_LIMIT_BASE = 3;
 const MAX_PIN_PROGRAMS = 12;
 const MAX_PIN_GOALS = 3;
+const MEMORIES_FREE_LIMIT = 3;
 const AVATAR_IMG = { vessel_a: "/avatars/female.jpg", vessel_b: "/avatars/male.jpg" };
 const PURPLE = "#a855f7";
 
@@ -38,10 +39,11 @@ export default function Dashboard() {
   const [profile, setProfile] = useState(null);
   const [programs, setPrograms] = useState([]);
   const [goals, setGoals] = useState([]);
+  const [memories, setMemories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [nameDraft, setNameDraft] = useState("");
   const [onboardGender, setOnboardGender] = useState("vessel_a");
-  const [view, setView] = useState("avatar"); // avatar | core | goals | pro
+  const [view, setView] = useState("avatar"); // avatar | core | goals | memories | pro
   const [showProgress, setShowProgress] = useState(false);
   const [progressData, setProgressData] = useState([]);
   const [showAbout, setShowAbout] = useState(false);
@@ -57,14 +59,16 @@ export default function Dashboard() {
   }, []);
 
   const loadAll = async (uid) => {
-    const [{ data: p }, { data: cp }, { data: g }] = await Promise.all([
+    const [{ data: p }, { data: cp }, { data: g }, { data: m }] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", uid).single(),
       supabase.from("core_programs").select("*").eq("user_id", uid).order("created_at"),
       supabase.from("goals").select("*").eq("user_id", uid).order("created_at"),
+      supabase.from("memories").select("*").eq("user_id", uid).order("created_at", { ascending: false }),
     ]);
     setProfile(p);
     setPrograms(cp || []);
     setGoals(g || []);
+    setMemories(m || []);
   };
 
   const isPaid = profile?.subscription_status === "active" || (profile?.paid_until && new Date(profile.paid_until) > new Date());
@@ -191,9 +195,34 @@ export default function Dashboard() {
   const doActivate = () => {
     const el = document.getElementById("activate-flash");
     if (el) {
+      el.style.transition = "none";
       el.style.opacity = "1";
-      setTimeout(() => { el.style.opacity = "0"; }, 700);
+      // Force the browser to apply the instant flash before we animate the fade-out.
+      void el.offsetHeight;
+      requestAnimationFrame(() => {
+        el.style.transition = "opacity 0.85s ease-out";
+        el.style.opacity = "0";
+      });
     }
+  };
+
+  const addMemory = async (text) => {
+    if (!isPaid && memories.length >= MEMORIES_FREE_LIMIT) {
+      alert(`Free plan allows ${MEMORIES_FREE_LIMIT} memories. Upgrade to Pro to save unlimited memories.`);
+      setView("pro");
+      return;
+    }
+    const { data, error } = await supabase
+      .from("memories")
+      .insert({ user_id: user.id, text })
+      .select()
+      .single();
+    if (!error) setMemories([data, ...memories]);
+  };
+
+  const removeMemory = async (id) => {
+    await supabase.from("memories").delete().eq("id", id);
+    setMemories(memories.filter((m) => m.id !== id));
   };
 
   const openProgress = async () => {
@@ -286,6 +315,16 @@ export default function Dashboard() {
           onCommit={(id) => logHistory("goals", id, goals)}
           onPin={(id) => togglePin("goals", id, goals, setGoals, MAX_PIN_GOALS)}
           addLabel="ADD GOAL"
+        />
+      )}
+
+      {view === "memories" && (
+        <MemoriesView
+          items={memories}
+          isPaid={isPaid}
+          freeLimit={MEMORIES_FREE_LIMIT}
+          onAdd={addMemory}
+          onRemove={removeMemory}
         />
       )}
 
@@ -454,6 +493,54 @@ function ManageList({ title, items, onAdd, onRemove, onChange, onCommit, onPin, 
   );
 }
 
+function MemoriesView({ items, isPaid, freeLimit, onAdd, onRemove }) {
+  const [draft, setDraft] = useState("");
+  const atLimit = !isPaid && items.length >= freeLimit;
+  return (
+    <div style={styles.managePanel}>
+      <div style={styles.manageTitle}>MEMORIES</div>
+      <p style={styles.pinHint}>Memories you want to remember and come back to.</p>
+
+      <div style={styles.addRow}>
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          placeholder="Write a moment worth remembering…"
+          style={styles.addInput}
+        />
+        <button
+          onClick={() => { if (draft.trim()) { onAdd(draft.trim()); setDraft(""); } }}
+          style={styles.addBtn}
+        >
+          + ADD MEMORY
+        </button>
+      </div>
+
+      {!isPaid && (
+        <p style={{ ...styles.pinHint, marginTop: -6 }}>
+          {items.length}/{freeLimit} free memories used{atLimit ? " — upgrade to Pro for unlimited." : "."}
+        </p>
+      )}
+
+      {items.map((m) => (
+        <div key={m.id} style={styles.manageRow}>
+          <div style={styles.manageRowTop}>
+            <span style={{ ...styles.manageLabel, whiteSpace: "normal", lineHeight: 1.4 }}>{m.text}</span>
+          </div>
+          <div style={{ fontSize: 11, color: "#8a80a8", marginTop: 2 }}>
+            {new Date(m.created_at).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}
+          </div>
+          <button onClick={() => onRemove(m.id)} style={styles.removeLink}>remove</button>
+        </div>
+      ))}
+
+      {items.length === 0 && (
+        <p style={styles.pinHint}>No memories yet — write your first one above.</p>
+      )}
+    </div>
+  );
+}
+
 function ProView({ isPaid, plan, paidUntil, onSubscribeMonthly, onBuyYearly, onManage, referralLink, bonusSlots }) {
   const [copied, setCopied] = useState(false);
   const share = async () => {
@@ -528,9 +615,9 @@ function SettingsRow({ title, subtitle, children, arrow }) {
 
 function BottomNav({ view, setView, onActivate, isPaid }) {
   const items = [
-    { key: "avatar", label: "AVATAR", icon: <Gem size={18} /> },
+    { key: "memories", label: "MEMORIES", icon: <span style={{ fontSize: 16 }}>✧</span> },
     { key: "core", label: "CORE", icon: <span style={{ fontSize: 16 }}>≡</span> },
-    { key: "activateBtn", label: "ACTIVATE", icon: <Gem size={20} />, isAction: true },
+    { key: "avatar", label: "AVATAR", icon: <Gem size={20} /> },
     { key: "goals", label: "GOALS", icon: <span style={{ fontSize: 16 }}>◎</span> },
     { key: "pro", label: "PRO", icon: <LockIcon locked={!isPaid} /> },
   ];
@@ -627,7 +714,7 @@ const styles = {
 
   activateControl: { display: "flex", flexDirection: "column", alignItems: "center", gap: 4, background: "none", border: "none", marginTop: 18, cursor: "pointer" },
   activateLabel: { fontSize: 10, letterSpacing: 1.5, color: "#e8dcff", fontWeight: 700 },
-  activateFlash: { position: "fixed", inset: 0, background: "radial-gradient(circle, rgba(216,180,255,0.35), transparent 70%)", pointerEvents: "none", opacity: 0, transition: "opacity 0.3s", zIndex: 40 },
+  activateFlash: { position: "fixed", inset: 0, background: "radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(224,192,255,0.85) 35%, rgba(168,85,247,0.5) 65%, transparent 85%)", pointerEvents: "none", opacity: 0, zIndex: 40 },
   progressLink: { display: "block", textAlign: "center", marginTop: 10, fontSize: 11, color: "#a89bc9", textDecoration: "underline", cursor: "pointer" },
   inviteBox: { marginTop: 24, paddingTop: 18, borderTop: "1px solid #3a3252" },
   inviteTitle: { fontWeight: 800, fontSize: 13, marginBottom: 6 },
