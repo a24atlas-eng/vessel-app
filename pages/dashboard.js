@@ -8,16 +8,21 @@ const MAX_PIN_GOALS = 3;
 const AVATAR_IMG = { vessel_a: "/avatars/female.jpg", vessel_b: "/avatars/male.jpg" };
 const PURPLE = "#a855f7";
 
-// Fixed hex-style slot positions (as % of the stage container) for up to 6 pinned programs.
+// Symmetric "sacred geometry" slot positions matching the reference grid style:
+// one apex point near the crystal, two upper points, two mid points, one bottom
+// point near the pedestal — all connected through the apex plus their neighbors.
 const SLOTS = [
-  { x: 50, y: 6, align: "center" },   // 0 top, near crystal
-  { x: 14, y: 16, align: "left" },    // 1 upper-left
-  { x: 86, y: 16, align: "right" },   // 2 upper-right
-  { x: 6, y: 38, align: "left" },     // 3 mid-left
-  { x: 94, y: 38, align: "right" },   // 4 mid-right
-  { x: 50, y: 78, align: "center" },  // 5 bottom, near pedestal
+  { x: 50, y: 9, align: "center" },   // 0 top apex, right under the crystal
+  { x: 20, y: 19, align: "left" },    // 1 upper-left
+  { x: 80, y: 19, align: "right" },   // 2 upper-right
+  { x: 9, y: 41, align: "left" },     // 3 mid-left
+  { x: 91, y: 41, align: "right" },   // 4 mid-right
+  { x: 50, y: 80, align: "center" },  // 5 bottom, near pedestal
 ];
-const SLOT_LINES = [[0, 1], [0, 2], [1, 3], [2, 4], [3, 5], [4, 5], [1, 2]];
+const SLOT_LINES = [
+  [0, 1], [0, 2], [0, 3], [0, 4], [0, 5],
+  [1, 2], [1, 3], [2, 4], [3, 5], [4, 5],
+];
 
 export default function Dashboard() {
   const router = useRouter();
@@ -31,6 +36,7 @@ export default function Dashboard() {
   const [view, setView] = useState("avatar"); // avatar | core | goals | pro
   const [showProgress, setShowProgress] = useState(false);
   const [progressData, setProgressData] = useState([]);
+  const [showAbout, setShowAbout] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -288,10 +294,13 @@ export default function Dashboard() {
               <input type="file" accept="image/*" onChange={(e) => uploadPhoto(e.target.files[0])} style={{ display: "none" }} />
             </label>
           </SettingsRow>
-          <SettingsRow title="Global Settings" subtitle="Notifications, language, units and more" arrow />
-          <SettingsRow title="About Earth Simulator" subtitle="Learn more about the simulator and how it works" arrow />
+          <div onClick={() => setShowAbout(true)}>
+            <SettingsRow title="About Earth Simulator" subtitle="Learn more about the simulator and how it works" arrow />
+          </div>
         </div>
       )}
+
+      {showAbout && <AboutModal onClose={() => setShowAbout(false)} />}
 
       <button style={styles.logout} onClick={async () => { await supabase.auth.signOut(); router.push("/login"); }}>Log out</button>
 
@@ -311,7 +320,10 @@ function AvatarView({ stageImg, pinnedPrograms, pinnedGoals, onActivate, onOpenP
 
         <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={styles.constellationSvg}>
           {SLOT_LINES.filter(([a, b]) => a < pinnedPrograms.length && b < pinnedPrograms.length).map(([a, b], i) => (
-            <line key={i} x1={SLOTS[a].x} y1={SLOTS[a].y} x2={SLOTS[b].x} y2={SLOTS[b].y} stroke="rgba(216,180,255,0.45)" strokeWidth="0.3" />
+            <line key={i} x1={SLOTS[a].x} y1={SLOTS[a].y} x2={SLOTS[b].x} y2={SLOTS[b].y} stroke="rgba(216,180,255,0.4)" strokeWidth="0.25" />
+          ))}
+          {pinnedPrograms.map((p, i) => (
+            <circle key={p.id} cx={SLOTS[i].x} cy={SLOTS[i].y} r="0.9" fill="#e8dcff" opacity="0.9" />
           ))}
         </svg>
 
@@ -388,6 +400,7 @@ function ManageList({ title, items, onAdd, onRemove, onChange, onCommit, onPin, 
   return (
     <div style={styles.managePanel}>
       <div style={styles.manageTitle}>{title}</div>
+      <p style={styles.pinHint}>Tap the star to pin it to your avatar.</p>
       {items.map((i) => (
         <div key={i.id} style={styles.manageRow}>
           <div style={styles.manageRowTop}>
@@ -445,6 +458,29 @@ function ProView({ isPaid, plan, paidUntil, onSubscribeMonthly, onBuyYearly, onM
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+function AboutModal({ onClose }) {
+  return (
+    <div style={styles.modalOverlay} onClick={onClose}>
+      <div style={styles.modalCard} onClick={(e) => e.stopPropagation()}>
+        <div style={styles.modalTitle}>About Earth Simulator</div>
+        <p style={styles.proText}>
+          Earth Simulator is a space for expanding awareness — a playful way to reflect on who
+          you are and who you want to become.
+        </p>
+        <p style={styles.proText}>
+          Customize your avatar, track your inner programs and goals, and use it as a mirror
+          for building a better version of your reality.
+        </p>
+        <p style={styles.proTextMuted}>
+          Note: this is a metaphor, intended for reflection and entertainment — not a literal
+          simulation.
+        </p>
+        <button style={styles.manageBtn} onClick={onClose}>Close</button>
+      </div>
     </div>
   );
 }
@@ -549,7 +585,8 @@ const styles = {
   inviteTitle: { fontWeight: 800, fontSize: 13, marginBottom: 6 },
 
   managePanel: { padding: "6px 20px 20px" },
-  manageTitle: { fontWeight: 800, fontSize: 15, letterSpacing: 1, marginBottom: 14 },
+  manageTitle: { fontWeight: 800, fontSize: 15, letterSpacing: 1, marginBottom: 6 },
+  pinHint: { fontSize: 11, color: "#a89bc9", marginBottom: 14 },
   manageRow: { marginBottom: 16 },
   manageRowTop: { display: "flex", alignItems: "center", gap: 8, fontSize: 13, marginBottom: 4 },
   manageLabel: { flex: 1 },
@@ -568,7 +605,7 @@ const styles = {
   manageBtn: { display: "block", width: "100%", padding: 10, borderRadius: 12, border: "1px solid #3a3252", background: "none", color: "#a89bc9", fontWeight: 600, fontSize: 11, cursor: "pointer" },
 
   settingsSection: { padding: "0 20px 10px" },
-  settingsRow: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", background: "rgba(255,255,255,0.04)", borderRadius: 12, marginBottom: 10 },
+  settingsRow: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", background: "rgba(255,255,255,0.04)", borderRadius: 12, marginBottom: 10, cursor: "pointer" },
   settingsTitle: { fontSize: 13, fontWeight: 700 },
   settingsSub: { fontSize: 11, color: "#a89bc9", marginTop: 2 },
   settingsArrow: { color: "#a89bc9", fontSize: 18 },
