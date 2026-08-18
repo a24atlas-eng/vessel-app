@@ -377,8 +377,6 @@ export default function Dashboard() {
 function AvatarView({ stageImg, pinnedPrograms, pinnedGoals, onActivate, onOpenProgress }) {
   return (
     <div style={styles.stageWrap}>
-      <div style={styles.bob}><Gem size={44} /></div>
-
       <div style={styles.stageCard}>
         <img src={stageImg} alt="avatar" style={styles.stageImg} />
 
@@ -416,7 +414,7 @@ function AvatarView({ stageImg, pinnedPrograms, pinnedGoals, onActivate, onOpenP
       </div>
 
       <button style={styles.activateControl} onClick={onActivate}>
-        <Gem size={30} />
+        <div style={styles.activateGemWrap}><Gem size={44} /></div>
         <span style={styles.activateLabel}>ACTIVATE</span>
       </button>
 
@@ -499,7 +497,7 @@ function MemoriesView({ items, isPaid, freeLimit, onAdd, onRemove }) {
   return (
     <div style={styles.managePanel}>
       <div style={styles.manageTitle}>MEMORIES</div>
-      <p style={styles.pinHint}>Memories you want to remember and come back to.</p>
+      <p style={styles.pinHint}>Memories you want to remember from Earth and come back to.</p>
 
       <div style={styles.addRow}>
         <input
@@ -615,7 +613,7 @@ function SettingsRow({ title, subtitle, children, arrow }) {
 
 function BottomNav({ view, setView, onActivate, isPaid }) {
   const items = [
-    { key: "memories", label: "MEMORIES", icon: <span style={{ fontSize: 16 }}>✧</span> },
+    { key: "memories", label: "MEMO", icon: <span style={{ fontSize: 16 }}>✧</span> },
     { key: "core", label: "CORE", icon: <span style={{ fontSize: 16 }}>≡</span> },
     { key: "avatar", label: "AVATAR", icon: <Gem size={20} /> },
     { key: "goals", label: "GOALS", icon: <span style={{ fontSize: 16 }}>◎</span> },
@@ -712,8 +710,9 @@ const styles = {
   goalOrbValue: { fontSize: 14, fontWeight: 900, color: "#fff", textShadow: "0 0 10px rgba(192,132,252,1)" },
   goalOrbLabel: { fontSize: 7, letterSpacing: 0.3, color: "#f0eaff", textAlign: "center", padding: "0 4px", lineHeight: 1.1, marginTop: 1, textTransform: "uppercase" },
 
-  activateControl: { display: "flex", flexDirection: "column", alignItems: "center", gap: 4, background: "none", border: "none", marginTop: 18, cursor: "pointer" },
-  activateLabel: { fontSize: 10, letterSpacing: 1.5, color: "#e8dcff", fontWeight: 700 },
+  activateControl: { display: "flex", flexDirection: "column", alignItems: "center", gap: 6, background: "none", border: "none", marginTop: 18, cursor: "pointer" },
+  activateGemWrap: { animation: "activatePulse 2.4s ease-in-out infinite" },
+  activateLabel: { fontSize: 11, letterSpacing: 1.5, color: "#e8dcff", fontWeight: 700 },
   activateFlash: { position: "fixed", inset: 0, background: "radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(224,192,255,0.85) 35%, rgba(168,85,247,0.5) 65%, transparent 85%)", pointerEvents: "none", opacity: 0, zIndex: 40 },
   progressLink: { display: "block", textAlign: "center", marginTop: 10, fontSize: 11, color: "#a89bc9", textDecoration: "underline", cursor: "pointer" },
   inviteBox: { marginTop: 24, paddingTop: 18, borderTop: "1px solid #3a3252" },
@@ -750,8 +749,8 @@ const styles = {
 
   logout: { display: "block", margin: "10px auto", background: "none", border: "none", color: "#8a80a8", fontSize: 12, cursor: "pointer" },
 
-  bottomNav: { position: "fixed", bottom: 0, left: 0, right: 0, display: "flex", justifyContent: "space-around", alignItems: "center", background: "rgba(15,9,28,0.92)", backdropFilter: "blur(10px)", borderTop: "1px solid rgba(255,255,255,0.08)", padding: "10px 6px calc(10px + env(safe-area-inset-bottom))", zIndex: 30 },
-  navBtn: { display: "flex", flexDirection: "column", alignItems: "center", gap: 3, background: "none", border: "none", cursor: "pointer" },
+  bottomNav: { position: "fixed", bottom: 0, left: 0, right: 0, display: "grid", gridTemplateColumns: "repeat(5, 1fr)", alignItems: "center", background: "rgba(15,9,28,0.92)", backdropFilter: "blur(10px)", borderTop: "1px solid rgba(255,255,255,0.08)", padding: "10px 6px calc(10px + env(safe-area-inset-bottom))", zIndex: 30 },
+  navBtn: { display: "flex", flexDirection: "column", alignItems: "center", gap: 3, background: "none", border: "none", cursor: "pointer", width: "100%" },
   navBtnLabel: { fontSize: 9, letterSpacing: 0.5, fontWeight: 700 },
 
   modalOverlay: { position: "fixed", inset: 0, background: "rgba(10,6,20,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 16 },
