@@ -21,6 +21,7 @@ create table if not exists core_programs (
   label text not null,
   value int not null default 50,
   pinned boolean not null default false,
+  pinned_at timestamptz,
   created_at timestamptz default now()
 );
 
@@ -30,6 +31,7 @@ create table if not exists goals (
   label text not null,
   value int not null default 0,
   pinned boolean not null default false,
+  pinned_at timestamptz,
   created_at timestamptz default now()
 );
 
