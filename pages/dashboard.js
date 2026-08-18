@@ -348,7 +348,7 @@ function AvatarView({ stageImg, pinnedPrograms, pinnedGoals, onActivate, onOpenP
             <line key={i} x1={SLOTS[a].x} y1={SLOTS[a].y} x2={SLOTS[b].x} y2={SLOTS[b].y} stroke="rgba(216,180,255,0.4)" strokeWidth="0.25" />
           ))}
           {pinnedPrograms.map((p, i) => (
-            <circle key={p.id} cx={SLOTS[i].x} cy={SLOTS[i].y} r="0.9" fill="#e8dcff" opacity="0.9" />
+            <circle key={p.id} cx={SLOTS[i].x} cy={SLOTS[i].y} r="1.1" fill="#ffffff" opacity="0.95" />
           ))}
         </svg>
 
@@ -356,8 +356,10 @@ function AvatarView({ stageImg, pinnedPrograms, pinnedGoals, onActivate, onOpenP
           const slot = SLOTS[i];
           return (
             <div key={p.id} style={{ position: "absolute", left: `${slot.x}%`, top: `${slot.y}%`, transform: `translate(${slot.align === "left" ? "-2%" : slot.align === "right" ? "-98%" : "-50%"}, -50%)`, textAlign: slot.align, minWidth: 90 }}>
-              <div style={styles.slotLabel}>{p.label}</div>
-              <div style={styles.slotValue}>{p.value}%</div>
+              <div style={styles.slotBadge}>
+                <div style={styles.slotLabel}>{p.label}</div>
+                <div style={styles.slotValue}>{p.value}%</div>
+              </div>
             </div>
           );
         })}
@@ -594,8 +596,15 @@ const styles = {
   stageCard: { position: "relative", width: "100%", maxWidth: 420, borderRadius: 20, overflow: "hidden", boxShadow: "0 10px 40px rgba(0,0,0,0.4)" },
   stageImg: { width: "100%", display: "block" },
   constellationSvg: { position: "absolute", inset: 0, width: "100%", height: "100%" },
-  slotLabel: { fontSize: 9, letterSpacing: 0.3, color: "#f0eaff", textShadow: "0 0 6px rgba(216,180,255,0.8)" },
-  slotValue: { fontSize: 11, fontWeight: 800, color: PURPLE, textShadow: "0 0 8px rgba(168,85,247,0.8)" },
+  slotBadge: {
+    display: "inline-block",
+    background: "rgba(10,6,20,0.4)",
+    backdropFilter: "blur(3px)",
+    borderRadius: 8,
+    padding: "3px 8px",
+  },
+  slotLabel: { fontSize: 10.5, letterSpacing: 0.3, color: "#f6f0ff", textShadow: "0 0 6px rgba(216,180,255,0.8)" },
+  slotValue: { fontSize: 12.5, fontWeight: 800, color: "#ffffff", textShadow: "0 0 8px rgba(216,180,255,0.9)" },
 
   pinnedGoalsOverlay: { position: "absolute", left: 0, right: 0, bottom: "9%", display: "flex", justifyContent: "space-evenly", gap: 8, padding: "0 12px" },
   goalOrb: {
