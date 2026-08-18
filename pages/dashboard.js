@@ -347,10 +347,11 @@ function AvatarView({ stageImg, pinnedPrograms, pinnedGoals, onActivate, onOpenP
           {SLOT_LINES.filter(([a, b]) => a < pinnedPrograms.length && b < pinnedPrograms.length).map(([a, b], i) => (
             <line key={i} x1={SLOTS[a].x} y1={SLOTS[a].y} x2={SLOTS[b].x} y2={SLOTS[b].y} stroke="rgba(216,180,255,0.4)" strokeWidth="0.25" />
           ))}
-          {pinnedPrograms.map((p, i) => (
-            <circle key={p.id} cx={SLOTS[i].x} cy={SLOTS[i].y} r="1.1" fill="#ffffff" opacity="0.95" />
-          ))}
         </svg>
+
+        {pinnedPrograms.map((p, i) => (
+          <div key={`node-${p.id}`} style={{ position: "absolute", left: `${SLOTS[i].x}%`, top: `${SLOTS[i].y}%`, transform: "translate(-50%, -50%)", ...styles.slotNode }} />
+        ))}
 
         {pinnedPrograms.map((p, i) => {
           const slot = SLOTS[i];
@@ -596,6 +597,14 @@ const styles = {
   stageCard: { position: "relative", width: "100%", maxWidth: 420, borderRadius: 20, overflow: "hidden", boxShadow: "0 10px 40px rgba(0,0,0,0.4)" },
   stageImg: { width: "100%", display: "block" },
   constellationSvg: { position: "absolute", inset: 0, width: "100%", height: "100%" },
+  slotNode: {
+    width: 8,
+    height: 8,
+    borderRadius: "50%",
+    background: "radial-gradient(circle, #f3e8ff 0%, #c084fc 55%, rgba(168,85,247,0) 75%)",
+    boxShadow: "0 0 6px 2px rgba(192,132,252,0.9), 0 0 14px 4px rgba(168,85,247,0.5)",
+    zIndex: 1,
+  },
   slotBadge: {
     display: "inline-flex",
     flexDirection: "column",
