@@ -3,25 +3,33 @@ import { useRouter } from "next/router";
 import { supabase } from "../lib/supabaseClient";
 
 const FREE_LIMIT_BASE = 3;
-const MAX_PIN_PROGRAMS = 6;
+const MAX_PIN_PROGRAMS = 12;
 const MAX_PIN_GOALS = 3;
 const AVATAR_IMG = { vessel_a: "/avatars/female.jpg", vessel_b: "/avatars/male.jpg" };
 const PURPLE = "#a855f7";
 
-// Symmetric "sacred geometry" slot positions matching the reference grid style:
-// one apex point near the crystal, two upper points, two mid points, one bottom
-// point near the pedestal — all connected through the apex plus their neighbors.
+// Two concentric "rings" of slots around the avatar: an outer ring (0-5) and
+// an inner ring closer to the body (6-11), for up to 12 pinned programs.
 const SLOTS = [
-  { x: 50, y: 9, align: "center" },   // 0 top apex, right under the crystal
-  { x: 20, y: 19, align: "left" },    // 1 upper-left
-  { x: 80, y: 19, align: "right" },   // 2 upper-right
-  { x: 9, y: 41, align: "left" },     // 3 mid-left
-  { x: 91, y: 41, align: "right" },   // 4 mid-right
-  { x: 50, y: 80, align: "center" },  // 5 bottom, near pedestal
+  { x: 50, y: 9, align: "center" },   // 0 outer top apex, near the crystal
+  { x: 20, y: 19, align: "left" },    // 1 outer upper-left
+  { x: 80, y: 19, align: "right" },   // 2 outer upper-right
+  { x: 9, y: 41, align: "left" },     // 3 outer mid-left
+  { x: 91, y: 41, align: "right" },   // 4 outer mid-right
+  { x: 50, y: 80, align: "center" },  // 5 outer bottom, near pedestal
+  { x: 38, y: 26, align: "right" },   // 6 inner upper-left (near collar)
+  { x: 62, y: 26, align: "left" },    // 7 inner upper-right (near collar)
+  { x: 30, y: 44, align: "right" },   // 8 inner mid-left (near shoulder/arm)
+  { x: 70, y: 44, align: "left" },    // 9 inner mid-right (near shoulder/arm)
+  { x: 35, y: 62, align: "right" },   // 10 inner lower-left (near waist)
+  { x: 65, y: 62, align: "left" },    // 11 inner lower-right (near waist)
 ];
 const SLOT_LINES = [
   [0, 1], [0, 2], [0, 3], [0, 4], [0, 5],
   [1, 2], [1, 3], [2, 4], [3, 5], [4, 5],
+  [0, 6], [0, 7], [6, 7], [1, 6], [2, 7],
+  [6, 8], [7, 9], [3, 8], [4, 9], [8, 9],
+  [8, 10], [9, 11], [10, 11], [5, 10], [5, 11],
 ];
 
 export default function Dashboard() {
@@ -148,6 +156,11 @@ export default function Dashboard() {
     const savedAt = new Date().toISOString();
     setProfile((p) => ({ ...p, avatar_url: url, photo_saved_at: savedAt }));
     await supabase.from("profiles").update({ avatar_url: url, photo_saved_at: savedAt }).eq("id", user.id);
+  };
+
+  const removePhoto = async () => {
+    setProfile((p) => ({ ...p, avatar_url: null, photo_saved_at: null }));
+    await supabase.from("profiles").update({ avatar_url: null, photo_saved_at: null }).eq("id", user.id);
   };
 
   const completeOnboarding = async () => {
@@ -289,10 +302,15 @@ export default function Dashboard() {
       {(view === "core" || view === "goals") && (
         <div style={styles.settingsSection}>
           <SettingsRow title="Your photo" subtitle="Upload a custom photo for your avatar">
-            <label style={styles.uploadBtn}>
-              Upload
-              <input type="file" accept="image/*" onChange={(e) => uploadPhoto(e.target.files[0])} style={{ display: "none" }} />
-            </label>
+            <div style={styles.photoBtnRow}>
+              <label style={styles.uploadBtn}>
+                Upload
+                <input type="file" accept="image/*" onChange={(e) => uploadPhoto(e.target.files[0])} style={{ display: "none" }} />
+              </label>
+              {profile?.avatar_url && (
+                <button style={styles.removeBtn} onClick={removePhoto}>Remove</button>
+              )}
+            </div>
           </SettingsRow>
           <div onClick={() => setShowAbout(true)}>
             <SettingsRow title="About Earth Simulator" subtitle="Learn more about the simulator and how it works" arrow />
@@ -339,9 +357,9 @@ function AvatarView({ stageImg, pinnedPrograms, pinnedGoals, onActivate, onOpenP
         {pinnedGoals.length > 0 && (
           <div style={styles.pinnedGoalsOverlay}>
             {pinnedGoals.map((g) => (
-              <div key={g.id} style={styles.pinnedGoal}>
-                <div style={styles.pinnedGoalLabel}>{g.label}</div>
-                <div style={styles.pinnedGoalValue}>{g.value}%</div>
+              <div key={g.id} style={styles.goalOrb}>
+                <div style={styles.goalOrbValue}>{g.value}%</div>
+                <div style={styles.goalOrbLabel}>{g.label}</div>
               </div>
             ))}
           </div>
@@ -569,13 +587,19 @@ const styles = {
   stageCard: { position: "relative", width: "100%", maxWidth: 420, borderRadius: 20, overflow: "hidden", boxShadow: "0 10px 40px rgba(0,0,0,0.4)" },
   stageImg: { width: "100%", display: "block" },
   constellationSvg: { position: "absolute", inset: 0, width: "100%", height: "100%" },
-  slotLabel: { fontSize: 11, letterSpacing: 0.5, color: "#f0eaff", textShadow: "0 0 6px rgba(216,180,255,0.8)" },
-  slotValue: { fontSize: 13, fontWeight: 800, color: PURPLE, textShadow: "0 0 8px rgba(168,85,247,0.8)" },
+  slotLabel: { fontSize: 9, letterSpacing: 0.3, color: "#f0eaff", textShadow: "0 0 6px rgba(216,180,255,0.8)" },
+  slotValue: { fontSize: 11, fontWeight: 800, color: PURPLE, textShadow: "0 0 8px rgba(168,85,247,0.8)" },
 
   pinnedGoalsOverlay: { position: "absolute", left: 0, right: 0, bottom: "9%", display: "flex", justifyContent: "space-evenly", gap: 8, padding: "0 12px" },
-  pinnedGoal: { textAlign: "center" },
-  pinnedGoalLabel: { fontSize: 10, letterSpacing: 0.5, color: "#f0eaff", textShadow: "0 0 6px rgba(216,180,255,0.9)" },
-  pinnedGoalValue: { fontSize: 15, fontWeight: 900, color: "#c084fc", textShadow: "0 0 14px rgba(192,132,252,1), 0 0 4px rgba(192,132,252,1)" },
+  goalOrb: {
+    width: 62, height: 62, borderRadius: "50%",
+    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+    background: "radial-gradient(circle at 35% 30%, rgba(255,255,255,0.5), rgba(192,132,252,0.35) 45%, rgba(120,60,200,0.25) 75%, transparent 100%)",
+    border: "1px solid rgba(216,180,255,0.6)",
+    boxShadow: "0 0 18px rgba(192,132,252,0.85), 0 0 4px rgba(255,255,255,0.6) inset",
+  },
+  goalOrbValue: { fontSize: 14, fontWeight: 900, color: "#fff", textShadow: "0 0 10px rgba(192,132,252,1)" },
+  goalOrbLabel: { fontSize: 7, letterSpacing: 0.3, color: "#f0eaff", textAlign: "center", padding: "0 4px", lineHeight: 1.1, marginTop: 1 },
 
   activateControl: { display: "flex", flexDirection: "column", alignItems: "center", gap: 4, background: "none", border: "none", marginTop: 18, cursor: "pointer" },
   activateLabel: { fontSize: 10, letterSpacing: 1.5, color: "#e8dcff", fontWeight: 700 },
@@ -610,6 +634,8 @@ const styles = {
   settingsSub: { fontSize: 11, color: "#a89bc9", marginTop: 2 },
   settingsArrow: { color: "#a89bc9", fontSize: 18 },
   uploadBtn: { padding: "6px 14px", borderRadius: 16, border: `1px solid ${PURPLE}`, color: PURPLE, fontSize: 11, fontWeight: 700, cursor: "pointer" },
+  photoBtnRow: { display: "flex", gap: 8 },
+  removeBtn: { padding: "6px 14px", borderRadius: 16, border: "1px solid #6b5f85", background: "none", color: "#a89bc9", fontSize: 11, fontWeight: 700, cursor: "pointer" },
 
   logout: { display: "block", margin: "10px auto", background: "none", border: "none", color: "#8a80a8", fontSize: 12, cursor: "pointer" },
 
