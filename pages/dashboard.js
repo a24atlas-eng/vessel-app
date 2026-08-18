@@ -114,8 +114,9 @@ export default function Dashboard() {
       return;
     }
     const newPinned = !item.pinned;
-    setList(list.map((i) => (i.id === id ? { ...i, pinned: newPinned } : i)));
-    await supabase.from(table).update({ pinned: newPinned }).eq("id", id);
+    const pinnedAt = newPinned ? new Date().toISOString() : null;
+    setList(list.map((i) => (i.id === id ? { ...i, pinned: newPinned, pinned_at: pinnedAt } : i)));
+    await supabase.from(table).update({ pinned: newPinned, pinned_at: pinnedAt }).eq("id", id);
   };
 
   const goCheckout = async (plan) => {
@@ -211,8 +212,14 @@ export default function Dashboard() {
   if (loading) return <div style={styles.loadingPage}>Loading…</div>;
 
   const stageImg = profile?.avatar_url || AVATAR_IMG[profile?.gender || "vessel_a"];
-  const pinnedPrograms = programs.filter((p) => p.pinned).slice(0, MAX_PIN_PROGRAMS);
-  const pinnedGoals = goals.filter((g) => g.pinned).slice(0, MAX_PIN_GOALS);
+  const pinnedPrograms = programs
+    .filter((p) => p.pinned)
+    .sort((a, b) => new Date(a.pinned_at || 0) - new Date(b.pinned_at || 0))
+    .slice(0, MAX_PIN_PROGRAMS);
+  const pinnedGoals = goals
+    .filter((g) => g.pinned)
+    .sort((a, b) => new Date(a.pinned_at || 0) - new Date(b.pinned_at || 0))
+    .slice(0, MAX_PIN_GOALS);
 
   return (
     <div style={styles.page}>
