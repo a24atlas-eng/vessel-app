@@ -600,14 +600,10 @@ const styles = {
     display: "inline-flex",
     flexDirection: "column",
     alignItems: "center",
-    background: "rgba(30,18,55,0.22)",
-    backdropFilter: "blur(7px)",
-    WebkitBackdropFilter: "blur(7px)",
-    borderRadius: 14,
     padding: "4px 10px",
   },
-  slotLabel: { fontSize: 10.5, letterSpacing: 0.3, color: "#f6f0ff", textShadow: "0 0 6px rgba(216,180,255,0.8)", textAlign: "center" },
-  slotValue: { fontSize: 12.5, fontWeight: 800, color: "#ffffff", textShadow: "0 0 8px rgba(216,180,255,0.9)", textAlign: "center" },
+  slotLabel: { fontSize: 10.5, letterSpacing: 0.5, color: "#f6f0ff", textShadow: "0 0 8px rgba(216,180,255,0.9), 0 0 3px rgba(0,0,0,0.6)", textAlign: "center", textTransform: "uppercase" },
+  slotValue: { fontSize: 12.5, fontWeight: 800, color: "#ffffff", textShadow: "0 0 10px rgba(216,180,255,1), 0 0 3px rgba(0,0,0,0.6)", textAlign: "center" },
 
   pinnedGoalsOverlay: { position: "absolute", left: 0, right: 0, bottom: "9%", display: "flex", justifyContent: "space-evenly", gap: 8, padding: "0 12px" },
   goalOrb: {
@@ -618,7 +614,7 @@ const styles = {
     boxShadow: "0 0 18px rgba(192,132,252,0.85), 0 0 4px rgba(255,255,255,0.6) inset",
   },
   goalOrbValue: { fontSize: 14, fontWeight: 900, color: "#fff", textShadow: "0 0 10px rgba(192,132,252,1)" },
-  goalOrbLabel: { fontSize: 7, letterSpacing: 0.3, color: "#f0eaff", textAlign: "center", padding: "0 4px", lineHeight: 1.1, marginTop: 1 },
+  goalOrbLabel: { fontSize: 7, letterSpacing: 0.3, color: "#f0eaff", textAlign: "center", padding: "0 4px", lineHeight: 1.1, marginTop: 1, textTransform: "uppercase" },
 
   activateControl: { display: "flex", flexDirection: "column", alignItems: "center", gap: 4, background: "none", border: "none", marginTop: 18, cursor: "pointer" },
   activateLabel: { fontSize: 10, letterSpacing: 1.5, color: "#e8dcff", fontWeight: 700 },
