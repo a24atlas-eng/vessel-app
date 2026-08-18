@@ -99,3 +99,22 @@ create policy "avatar delete own folder"
 create policy "avatar public read"
   on storage.objects for select to public
   using (bucket_id = 'avatars');
+
+
+-- ============================================================
+-- Memories: short life-moment entries the user writes and can
+-- come back to. First 3 are free, more require an active plan
+-- (enforced in the app, not in SQL).
+-- ============================================================
+
+create table if not exists memories (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade not null,
+  text text not null,
+  created_at timestamptz default now()
+);
+
+alter table memories enable row level security;
+
+create policy "own memories" on memories
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
